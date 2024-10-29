@@ -20,7 +20,7 @@
 
         <Image x:Name="Github" HorizontalAlignment="Left" Margin="25,150,0,0" VerticalAlignment="Top" Width="40" Height="40" Source="/Views/Github.png"/>
         <TextBlock HorizontalAlignment="Left" Margin="90,160,0,0" VerticalAlignment="Top">
-                <Hyperlink NavigateUri="https://github.com/oureveryday/Steam-auto-crack" RequestNavigate="Hyperlink_RequestNavigate">
+                <Hyperlink NavigateUri="https://github.com/SteamAutoCracks/Steam-auto-crack" RequestNavigate="Hyperlink_RequestNavigate">
                 Github
                 </Hyperlink>
         </TextBlock>
