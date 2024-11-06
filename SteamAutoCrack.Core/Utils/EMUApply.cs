@@ -327,7 +327,7 @@ public class EMUApply : IEMUApply
                          SearchOption.AllDirectories)) await Applyx86(dllpath, emuApplyConfig).ConfigureAwait(false);
             foreach (var dllpath in Directory.EnumerateFiles(emuApplyConfig.ApplyPath, "steam_api64.dll",
                          SearchOption.AllDirectories)) await Applyx64(dllpath, emuApplyConfig).ConfigureAwait(false);
-            _log.Information("Applyed Steam emulator to \"{filePath}\"...", emuApplyConfig.ApplyPath);
+            _log.Information("Applied Steam emulator to \"{filePath}\"...", emuApplyConfig.ApplyPath);
         }
         catch (Exception ex)
         {
