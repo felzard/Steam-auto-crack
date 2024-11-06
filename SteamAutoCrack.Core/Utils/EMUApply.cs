@@ -10,22 +10,22 @@ public class EMUApplyConfig
     /// <summary>
     ///     Steam emulator config path.
     /// </summary>
-    public string? ConfigPath { get; set; } = Path.Combine(Config.Config.TempPath, "steam_settings");
+    public string ConfigPath { get; set; } = Path.Combine(Config.Config.TempPath, "steam_settings");
 
     /// <summary>
     ///     Path of steam emulator files.
     /// </summary>
-    public string? GoldbergPath { get; set; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Goldberg");
+    public string GoldbergPath { get; set; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Goldberg");
 
     /// <summary>
     ///     Path to apply steam emulator.
     /// </summary>
-    public string? ApplyPath { get; set; }
+    public string ApplyPath { get; set; } = String.Empty;
 
     /// <summary>
     ///     Emulator save location.
     /// </summary>
-    public string? LocalSave { get; set; } = Path.Combine("steam_settings", "saves");
+    public string LocalSave { get; set; } = Path.Combine("steam_settings", "saves");
 
     /// <summary>
     ///     Enable change default emulator save location.
@@ -53,22 +53,22 @@ public class EMUApplyConfigDefault
     /// <summary>
     ///     Steam emulator config path.
     /// </summary>
-    public static readonly string? ConfigPath = Path.Combine(Config.Config.TempPath, "steam_settings");
+    public static readonly string ConfigPath = Path.Combine(Config.Config.TempPath, "steam_settings");
 
     /// <summary>
     ///     Path to apply steam emulator.
     /// </summary>
-    public static readonly string? ApplyPath;
+    public static readonly string ApplyPath = string.Empty;
 
     /// <summary>
     ///     Path of steam emulator files.
     /// </summary>
-    public static readonly string? GoldbergPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Goldberg");
+    public static readonly string GoldbergPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Goldberg");
 
     /// <summary>
     ///     Emulator save location.
     /// </summary>
-    public static readonly string? LocalSave = Path.Combine("steam_settings", "saves");
+    public static readonly string LocalSave = Path.Combine("steam_settings", "saves");
 
     /// <summary>
     ///     Enable change default emulator save location.
