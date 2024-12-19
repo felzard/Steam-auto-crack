@@ -345,4 +345,10 @@
   <data name="_6RestoreCrack" xml:space="preserve">
     <value>6. Restore Crack</value>
   </data>
+  <data name="SteamAPICheckBypassMode" xml:space="preserve">
+    <value>SteamAPICheckBypass Mode:</value>
+  </data>
+  <data name="NthTime" xml:space="preserve">
+    <value>Nth Time:</value>
+  </data>
 </root>

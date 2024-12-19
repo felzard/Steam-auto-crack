@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using SteamAutoCrack.Core.Config;
 using SteamAutoCrack.Core.Utils;
+using SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils;
 
 namespace SteamAutoCrack.ViewModels;
 
@@ -16,6 +17,8 @@ internal class MainWindowViewModel : INotifyPropertyChanged
         GameInfoAPIs = Enum.GetValues(typeof(EMUGameInfoConfig.GeneratorGameInfoAPI))
             .Cast<EMUGameInfoConfig.GeneratorGameInfoAPI>().ToList();
         Languages = Enum.GetValues(typeof(EMUConfig.Languages)).Cast<EMUConfig.Languages>().ToList();
+        SteamAPICheckBypassModes = Enum.GetValues(typeof(SteamStubUnpackerConfig.SteamAPICheckBypassModes))
+            .Cast<SteamStubUnpackerConfig.SteamAPICheckBypassModes>().ToList();
     }
 
     #region INPC
@@ -443,6 +446,36 @@ internal class MainWindowViewModel : INotifyPropertyChanged
             if (value != Config.SteamStubUnpackerConfigs.UseExperimentalFeatures)
             {
                 Config.SteamStubUnpackerConfigs.UseExperimentalFeatures = value;
+                NotifyPropertyChanged();
+            }
+        }
+    }
+
+    public SteamStubUnpackerConfig.SteamAPICheckBypassModes SteamAPICheckBypassMode
+    {
+        get => Config.SteamStubUnpackerConfigs.SteamAPICheckBypassMode;
+
+        set
+        {
+            if (value != Config.SteamStubUnpackerConfigs.SteamAPICheckBypassMode)
+            {
+                Config.SteamStubUnpackerConfigs.SteamAPICheckBypassMode = value;
+                NotifyPropertyChanged();
+            }
+        }
+    }
+
+    public List<SteamStubUnpackerConfig.SteamAPICheckBypassModes> SteamAPICheckBypassModes { get; set; }
+
+    public Int64 SteamAPICheckBypassNthTime
+    {
+        get => Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime;
+
+        set
+        {
+            if (value != Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime)
+            {
+                Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime = value;
                 NotifyPropertyChanged();
             }
         }

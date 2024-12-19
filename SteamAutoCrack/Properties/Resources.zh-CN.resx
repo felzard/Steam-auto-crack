@@ -345,4 +345,10 @@
   <data name="_6RestoreCrack" xml:space="preserve">
     <value>6.恢复破解</value>
   </data>
+  <data name="SteamAPICheckBypassMode" xml:space="preserve">
+    <value>SteamAPICheckBypass 模式:</value>
+  </data>
+  <data name="NthTime" xml:space="preserve">
+    <value>第N次:</value>
+  </data>
 </root>

@@ -71,6 +71,30 @@ namespace SteamAutoCrack.Core.Utils
                                 _log.Debug(ex, "Failed to restore \"{pathtodelete}\". Skipping...", pathtorestore);
                             }
 
+                        foreach (var pathtodelete in Directory.EnumerateFiles(path, "SteamAPICheckBypass.json",
+                                     SearchOption.AllDirectories))
+                            try
+                            {
+                                _log.Debug("Deleting \"{path}\"...", pathtodelete);
+                                File.Delete(pathtodelete);
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.Debug(ex, "Failed to delete \"{pathtodelete}\". Skipping...", pathtodelete);
+                            }
+
+                        foreach (var pathtodelete in Directory.EnumerateFiles(path, "version.dll",
+                                     SearchOption.AllDirectories))
+                            try
+                            {
+                                _log.Debug("Deleting \"{path}\"...", pathtodelete);
+                                File.Delete(pathtodelete);
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.Debug(ex, "Failed to delete \"{pathtodelete}\". Skipping...", pathtodelete);
+                            }
+
                         foreach (var pathtodelete in Directory.EnumerateDirectories(path, "steam_settings",
                                      SearchOption.AllDirectories))
                             try

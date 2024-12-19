@@ -475,6 +475,15 @@ namespace SteamAutoCrack.Properties {
         }
         
         /// <summary>
+        ///   查找类似 Nth Time: 的本地化字符串。
+        /// </summary>
+        public static string NthTime {
+            get {
+                return ResourceManager.GetString("NthTime", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   查找类似 Offline Mode 的本地化字符串。
         /// </summary>
         public static string OfflineMode {
@@ -642,6 +651,15 @@ namespace SteamAutoCrack.Properties {
         public static string Start {
             get {
                 return ResourceManager.GetString("Start", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   查找类似 SteamAPICheckBypass Mode: 的本地化字符串。
+        /// </summary>
+        public static string SteamAPICheckBypassMode {
+            get {
+                return ResourceManager.GetString("SteamAPICheckBypassMode", resourceCulture);
             }
         }
         

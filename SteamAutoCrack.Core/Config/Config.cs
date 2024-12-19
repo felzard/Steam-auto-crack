@@ -7,6 +7,7 @@ using Serilog.Core;
 using Serilog.Events;
 using SteamAutoCrack.Core.Utils;
 using SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils;
+using static SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils.SteamStubUnpackerConfig;
 
 namespace SteamAutoCrack.Core.Config;
 
@@ -413,6 +414,16 @@ public class SteamStubUnpackerConfigs
     /// </summary>
     public bool UseExperimentalFeatures { get; set; } = SteamStubUnpackerConfigDefault.UseExperimentalFeatures;
 
+    /// <summary>
+    ///     SteamAPICheckBypass Mode
+    /// </summary>
+    public SteamAPICheckBypassModes SteamAPICheckBypassMode { get; set; } = SteamAPICheckBypassModes.Disabled;
+
+    /// <summary>
+    ///     SteamAPI Check Bypass Nth Time Setting
+    /// </summary>
+    public Int64 SteamAPICheckBypassNthTime { get; set; } = 1;
+
     public void ResettoDefault()
     {
         KeepBind = SteamStubUnpackerConfigDefault.KeepBind;
@@ -420,6 +431,8 @@ public class SteamStubUnpackerConfigs
         Realign = SteamStubUnpackerConfigDefault.Realign;
         ReCalcChecksum = SteamStubUnpackerConfigDefault.ReCalcChecksum;
         UseExperimentalFeatures = SteamStubUnpackerConfigDefault.UseExperimentalFeatures;
+        SteamAPICheckBypassMode = SteamStubUnpackerConfigDefault.SteamAPICheckBypassMode;
+        SteamAPICheckBypassNthTime = SteamStubUnpackerConfigDefault.SteamAPICheckBypassNthTime;
     }
 
     public SteamStubUnpackerConfig GetSteamStubUnpackerConfig()
@@ -430,7 +443,9 @@ public class SteamStubUnpackerConfigs
             KeepStub = KeepStub,
             Realign = Realign,
             ReCalcChecksum = ReCalcChecksum,
-            UseExperimentalFeatures = UseExperimentalFeatures
+            UseExperimentalFeatures = UseExperimentalFeatures,
+            SteamAPICheckBypassMode = SteamAPICheckBypassMode,
+            SteamAPICheckBypassNthTime = SteamAPICheckBypassNthTime
         };
     }
 }

@@ -15,6 +15,7 @@ using Serilog;
 using Serilog.Events;
 using SteamAutoCrack.Core.Config;
 using SteamAutoCrack.Core.Utils;
+using SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils;
 using SteamAutoCrack.Properties;
 using SteamAutoCrack.Utils;
 using SteamAutoCrack.ViewModels;
@@ -65,8 +66,14 @@ public partial class MainWindow
                 .CreateLogger();
         _log = Log.ForContext<MainWindow>();
         DataContext = viewModel;
+        Loaded += MainWindow_Loaded;
         Task.Run(async () => { await SteamAppList.Initialize().ConfigureAwait(false); });
         Task.Run(() => { CheckGoldberg(); });
+    }
+
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        SteamAPICheckBypassMode_SelectionChanged(null, null);
     }
 
     private void MainWindow_Closing(object sender, CancelEventArgs e)
@@ -523,6 +530,23 @@ public partial class MainWindow
 
     #endregion
 
+    #region SteamStubUnpacker
+    private void SteamAPICheckBypassMode_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (SteamAPICheckBypassNthTime == null)
+            return;
+        if (viewModel.SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.Disabled ||
+            viewModel.SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.All)
+        {
+                SteamAPICheckBypassNthTime.IsEnabled = false;
+        }
+        else
+        {
+                SteamAPICheckBypassNthTime.IsEnabled = true;
+        }
+    }
+    #endregion
+
     #region Restore
 
     private void Restore_Checked(object sender, RoutedEventArgs e)
@@ -553,6 +577,5 @@ public partial class MainWindow
         viewModel.Unpack = true;
         viewModel.ApplyEMU = true;
     }
-
     #endregion
 }

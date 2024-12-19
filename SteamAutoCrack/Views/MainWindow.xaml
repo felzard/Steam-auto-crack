@@ -107,17 +107,27 @@
         </Grid>
 
         <CheckBox x:Name="Unpack" Content="{I18N {x:Static steamAutoCrack:LangKeys._3UnpackSteamStub}}" HorizontalAlignment="Left" Margin="10,355,0,0" VerticalAlignment="Top" IsChecked="{Binding Unpack}"/>
-        <Grid x:Name="UnpackGrid" Margin="10,135,0,10" Height="45" Width="480">
+        <Grid x:Name="UnpackGrid" Margin="10,165,0,10" Height="75" Width="480">
             <Border BorderBrush="Black" BorderThickness="1"/>
             <CheckBox x:Name="KeepBind" Content="{I18N {x:Static steamAutoCrack:LangKeys.KeepBindSection}}" HorizontalAlignment="Left" Margin="10,5,0,0" VerticalAlignment="Top" IsChecked="{Binding KeepBind}"/>
             <CheckBox x:Name="KeepStub" Content="{I18N {x:Static steamAutoCrack:LangKeys.KeepDOSStubData}}" HorizontalAlignment="Left" Margin="10,25,0,0" VerticalAlignment="Top" IsChecked="{Binding KeepStub}"/>
             <CheckBox x:Name="Realign" Content="{I18N {x:Static steamAutoCrack:LangKeys.RealignSections}}" HorizontalAlignment="Left" Margin="360,5,0,0" VerticalAlignment="Top" IsChecked="{Binding Realign}"/>
             <CheckBox x:Name="ReCalcChecksum" Content="{I18N {x:Static steamAutoCrack:LangKeys.RecalculateFileChecksum}}" HorizontalAlignment="Left" Margin="175,25,0,0" VerticalAlignment="Top" IsChecked="{Binding ReCalcChecksum}"/>
             <CheckBox x:Name="UseExperimentalFeatures" Content="{I18N {x:Static steamAutoCrack:LangKeys.UseExperimentalFeatures}}" HorizontalAlignment="Left" Margin="175,5,0,0" VerticalAlignment="Top" IsChecked="{Binding UseExperimentalFeatures}"/>
+            <TextBlock HorizontalAlignment="Left" Margin="10,47,0,0" TextWrapping="Wrap" Text="{I18N {x:Static steamAutoCrack:LangKeys.SteamAPICheckBypassMode}}" VerticalAlignment="Top"/>
+            <ComboBox x:Name="SteamAPICheckBypassMode" HorizontalAlignment="Left" Margin="182,45,0,0" VerticalAlignment="Top" Width="150" ItemsSource="{Binding SteamAPICheckBypassModes}" SelectedItem="{Binding SteamAPICheckBypassMode}" SelectionChanged="SteamAPICheckBypassMode_SelectionChanged">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Converter={StaticResource enumConverter}}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock HorizontalAlignment="Left" Margin="340,47,0,0" TextWrapping="Wrap" Text="{I18N {x:Static steamAutoCrack:LangKeys.NthTime}}" VerticalAlignment="Top"/>
+            <TextBox x:Name="SteamAPICheckBypassNthTime" HorizontalAlignment="Left" Margin="400,47,0,0" TextWrapping="NoWrap" Text="{Binding SteamAPICheckBypassNthTime}" VerticalAlignment="Top" Width="70" MaxLines="1"/>
         </Grid>
 
-        <CheckBox x:Name="ApplyEMU" Content="{I18N {x:Static steamAutoCrack:LangKeys._4ApplyGoldbergSteamEmulator}}" HorizontalAlignment="Left" Margin="10,420,0,0" VerticalAlignment="Top" IsChecked="{Binding ApplyEMU}"/>
-        <Grid x:Name="ApplyEMUGrid" Margin="10,320,0,40" Height="70" Width="480">
+        <CheckBox x:Name="ApplyEMU" Content="{I18N {x:Static steamAutoCrack:LangKeys._4ApplyGoldbergSteamEmulator}}" HorizontalAlignment="Left" Margin="10,450,0,0" VerticalAlignment="Top" IsChecked="{Binding ApplyEMU}"/>
+        <Grid x:Name="ApplyEMUGrid" Margin="10,380,0,40" Height="70" Width="480">
             <Border BorderBrush="Black" BorderThickness="1"/>
 
             <CheckBox x:Name="UseLocalSave" Content="{I18N {x:Static steamAutoCrack:LangKeys.UseCustomSaveLocation}}" HorizontalAlignment="Left" Margin="10,5,0,0" VerticalAlignment="Top" IsChecked="{Binding UseLocalSave}"/>
@@ -128,8 +138,8 @@
             <CheckBox x:Name="ForceGenerateInterfacesFiles" Content="{I18N {x:Static steamAutoCrack:LangKeys.ForceGenerateForEachSteam__api64Dll}}" HorizontalAlignment="Left" Margin="215,45,0,0" VerticalAlignment="Top" IsChecked="{Binding ForceGenerateInterfacesFiles}"/>
         </Grid>
 
-        <CheckBox x:Name="GenerateCrackOnly" Content="{I18N {x:Static steamAutoCrack:LangKeys._5GenerateCrackOnlyFiles}}" HorizontalAlignment="Left" Margin="10,510,0,0" VerticalAlignment="Top" IsChecked="{Binding GenerateCrackOnly}"/>
-        <Grid x:Name="GenerateCrackOnlyGrid" Margin="10,455,0,10" Height="55" Width="480">
+        <CheckBox x:Name="GenerateCrackOnly" Content="{I18N {x:Static steamAutoCrack:LangKeys._5GenerateCrackOnlyFiles}}" HorizontalAlignment="Left" Margin="10,540,0,0" VerticalAlignment="Top" IsChecked="{Binding GenerateCrackOnly}"/>
+        <Grid x:Name="GenerateCrackOnlyGrid" Margin="10,515,0,10" Height="55" Width="480">
             <Border BorderBrush="Black" BorderThickness="1"/>
             <TextBlock HorizontalAlignment="Left" Margin="10,10,0,0" TextWrapping="Wrap" Text="{I18N {x:Static steamAutoCrack:LangKeys.OutputPath}}" VerticalAlignment="Top"/>
             <TextBox x:Name="textBox" HorizontalAlignment="Left" Margin="93,9,0,0" TextWrapping="NoWrap" Text="{Binding OutputPath}" VerticalAlignment="Top" Width="349"/>
@@ -139,7 +149,7 @@
             <Button x:Name="SelectOutpath" Content="..." HorizontalAlignment="Left" Margin="450,8,0,0" VerticalAlignment="Top" Width="25" Height="17" Click="SelectOutpath_Click"/>
         </Grid>
 
-        <CheckBox x:Name="Restore" Content="{I18N {x:Static steamAutoCrack:LangKeys._6RestoreCrack}}" HorizontalAlignment="Left" Margin="10,585,0,0" VerticalAlignment="Top" IsChecked="{Binding Restore}" Checked="Restore_Checked" Unchecked="Restore_Unchecked"/>
+        <CheckBox x:Name="Restore" Content="{I18N {x:Static steamAutoCrack:LangKeys._6RestoreCrack}}" HorizontalAlignment="Left" Margin="10,615,0,0" VerticalAlignment="Top" IsChecked="{Binding Restore}" Checked="Restore_Checked" Unchecked="Restore_Unchecked"/>
 
 
 
