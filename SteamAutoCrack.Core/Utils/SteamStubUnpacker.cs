@@ -297,6 +297,12 @@ namespace SteamAutoCrack.Core.Utils
                             else
                                 File.Copy(dll, Path.Combine(Path.GetDirectoryName(file), "version.dll"));
                             var jsonContent = new Dictionary<string, object>();
+                            if (File.Exists(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json")))
+                            {
+                                var oldjsonString = File.ReadAllText(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json"));
+                                jsonContent = JsonSerializer.Deserialize<Dictionary<string, object>>(oldjsonString);
+                            }
+                            
                             jsonContent[Path.GetFileName(file)] = new
                             {
                                 mode = "file_redirect",
