@@ -107,16 +107,6 @@ namespace SteamAutoCrack.Core.Utils
             private readonly SteamlessOptions steamlessOptions;
             private readonly List<SteamlessPlugin> steamlessPlugins = new();
 
-            /// <summary>
-            /// Gets or sets the dos header of the file.
-            /// </summary>
-            private NativeApi32.ImageDosHeader32 DosHeader { get; set; }
-
-            /// <summary>
-            /// Gets or sets the NT headers of the file.
-            /// </summary>
-            private NativeApi32.ImageNtHeaders32 NtHeaders { get; set; }
-
             private SteamStubUnpackerConfig.SteamAPICheckBypassModes _SteamAPICheckBypassMode { get; set; }
             private Int64 _SteamAPICheckBypassNthTime { get; set; }
 
@@ -289,20 +279,21 @@ namespace SteamAutoCrack.Core.Utils
                             break;
                         }
                     }
-                    if (IsFile64Bit())
-                    {
-                        dll = Path.Combine(dllPath, "SteamAPICheckBypass.dll");
-                    }
-                    else
-                    {
-                        dll = Path.Combine(dllPath, "SteamAPICheckBypass_x32.dll");
-                    }
-
                     if (folder)
                     {
 
                         foreach (var file in Directory.GetFiles(path, "*.exe", SearchOption.AllDirectories))
                         {
+                            var f = new Pe32File(file);
+                            f.Parse();
+                            if (!f.IsFile64Bit())
+                            {
+                                dll = Path.Combine(dllPath, "SteamAPICheckBypass_x32.dll");
+                            }
+                            else
+                            {
+                                dll = Path.Combine(dllPath, "SteamAPICheckBypass.dll");
+                            }
                             if (File.Exists(Path.Combine(Path.GetDirectoryName(file), "version.dll")))
                             {
                                 _log.Information("Steam API Check Bypass dll already exists, skipping...");
@@ -365,6 +356,16 @@ namespace SteamAutoCrack.Core.Utils
                     }
                     else
                     {
+                        var f = new Pe32File(path);
+                        f.Parse();
+                        if (!f.IsFile64Bit())
+                        {
+                            dll = Path.Combine(dllPath, "SteamAPICheckBypass_x32.dll");
+                        }
+                        else
+                        {
+                            dll = Path.Combine(dllPath, "SteamAPICheckBypass.dll");
+                        }
                         if (File.Exists(Path.Combine(Path.GetDirectoryName(path), "version.dll")))
                         {
                             _log.Information("Steam API Check Bypass dll already exists, skipping...");
@@ -429,11 +430,6 @@ namespace SteamAutoCrack.Core.Utils
                     _log.Error(ex, "Failed to apply SteamAPICheckBypass.");
                     throw new Exception("Failed to apply SteamAPICheckBypass.");
                 }
-            }
-
-            private bool IsFile64Bit()
-            {
-                return (NtHeaders.FileHeader.Machine & (uint)NativeApi32.MachineType.X64) == (uint)NativeApi32.MachineType.X64;
             }
         }
     }
