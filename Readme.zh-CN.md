@@ -33,6 +33,7 @@
 
 * <https://github.com/atom0s/Steamless>
 * <https://github.com/Detanup01/gbe_fork>
+* <https://github.com/oureveryday/Steam-API-Check-Bypass>
 
 ## 编译
 

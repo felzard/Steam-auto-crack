@@ -33,6 +33,7 @@ Latest Version 3.0 Using .Net 8.0.
 
 * <https://github.com/atom0s/Steamless>
 * <https://github.com/Detanup01/gbe_fork>
+* <https://github.com/oureveryday/Steam-API-Check-Bypass>
 
 ## Build
 
