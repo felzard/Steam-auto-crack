@@ -103,6 +103,7 @@ public class GenCrackOnly : IGenCrackOnly
 
                 Directory.CreateDirectory(Path.Combine(config.OutputPath, "Crack"));
                 var files = new List<string>();
+                var bypassfiles = new List<string>();
                 var folders = new List<string>();
                 foreach (var path in Directory.EnumerateFiles(config.SourcePath, "*.exe.bak", SearchOption.AllDirectories))
                     files.Add(path);
@@ -129,6 +130,21 @@ public class GenCrackOnly : IGenCrackOnly
                         Path.Combine(config.OutputPath, "Crack", Path.GetRelativePath(config.SourcePath, path)));
                     File.Copy(origpath,
                         Path.Combine(config.OutputPath, "Crack", Path.GetRelativePath(config.SourcePath, origpath)));
+                }
+
+                foreach (var path in Directory.EnumerateFiles(config.SourcePath, "SteamAPICheckBypass.json", SearchOption.AllDirectories))
+                    bypassfiles.Add(path);
+                foreach (var path in Directory.EnumerateFiles(config.SourcePath, "version.dll", SearchOption.AllDirectories))
+                    bypassfiles.Add(path);
+
+                foreach (var path in bypassfiles)
+                {
+                    if (!Directory.Exists(Path.Combine(config.OutputPath, "Crack",
+                            Path.GetRelativePath(config.SourcePath, Path.GetDirectoryName(path)))))
+                        Directory.CreateDirectory(Path.Combine(config.OutputPath, "Crack",
+                            Path.GetRelativePath(config.SourcePath, Path.GetDirectoryName(path))));
+                    File.Copy(path,
+                        Path.Combine(config.OutputPath, "Crack", Path.GetRelativePath(config.SourcePath, path)));
                 }
 
                 foreach (var path in folders)
