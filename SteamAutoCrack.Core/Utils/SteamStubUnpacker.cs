@@ -316,14 +316,13 @@ namespace SteamAutoCrack.Core.Utils
                             apidlls = apidlls.Concat(Directory
                                 .GetFiles(path, "steam_api64.dll", SearchOption.AllDirectories)
                                 .Select(p => Path.GetRelativePath(Path.GetDirectoryName(file), p))).ToArray();
-                            var steamsettingsdirs = Directory.GetDirectories(Path.GetDirectoryName(path),
-                                    "steam_settings", SearchOption.AllDirectories)
-                                .Select(p => Path.GetRelativePath(Path.GetDirectoryName(file), p)).ToArray();
-                            foreach (var steamsettings in steamsettingsdirs)
-                                jsonContent[steamsettings] = new
+                            foreach (var apiDllPath in apidlls)
+                            {
+                                jsonContent[Path.Combine(Path.GetDirectoryName(apiDllPath),"steam_settings")] = new
                                 {
                                     mode = "file_hide"
                                 };
+                            }
                             foreach (var apiDllPath in apidlls)
                                 if (_SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.All)
                                     jsonContent[apiDllPath] = new
@@ -390,14 +389,13 @@ namespace SteamAutoCrack.Core.Utils
                         apidlls = apidlls.Concat(Directory
                             .GetFiles(Path.GetDirectoryName(path), "steam_api64.dll", SearchOption.AllDirectories)
                             .Select(p => Path.GetRelativePath(Path.GetDirectoryName(path), p))).ToArray();
-                        var steamsettingsdirs = Directory.GetDirectories(Path.GetDirectoryName(path), "steam_settings",
-                                SearchOption.AllDirectories)
-                            .Select(p => Path.GetRelativePath(Path.GetDirectoryName(path), p)).ToArray();
-                        foreach (var steamsettings in steamsettingsdirs)
-                            jsonContent[steamsettings] = new
+                        foreach (var apiDllPath in apidlls)
+                        {
+                            jsonContent[Path.Combine(Path.GetDirectoryName(apiDllPath), "steam_settings")] = new
                             {
                                 mode = "file_hide"
                             };
+                        }
                         foreach (var apiDllPath in apidlls)
                             if (_SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.All)
                                 jsonContent[apiDllPath] = new
