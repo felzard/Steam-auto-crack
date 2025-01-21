@@ -1219,7 +1219,7 @@ internal class GeneratorSteamClient : Generator
                     if (supported_keys_triggers.Contains(btn_name_lower))
                     {
                         var group = groups_by_id[group_number];
-                        string group_mode = ToStringSafe(GetKeyIgnoreCase(group, "mode"));
+                        var group_mode = ToStringSafe(GetKeyIgnoreCase(group, "mode"));
                         if (group_mode.Equals("trigger", StringComparison.OrdinalIgnoreCase))
                         {
                             foreach (var groupProp in group)
@@ -1244,7 +1244,8 @@ internal class GeneratorSteamClient : Generator
                                     // ex: action_name = "driving_abackward"
                                     var action_name = ToStringSafe(GetKeyIgnoreCase(groupProp.Value, preset_name));
                                     string binding;
-                                    if (string.Equals(btn_name_lower, "left_trigger", StringComparison.OrdinalIgnoreCase))
+                                    if (string.Equals(btn_name_lower, "left_trigger",
+                                            StringComparison.OrdinalIgnoreCase))
                                         binding = "LTRIGGER";
                                     else
                                         binding = "RTRIGGER";
@@ -1263,7 +1264,8 @@ internal class GeneratorSteamClient : Generator
                                 else if (groupProp.Key.Equals("inputs", StringComparison.OrdinalIgnoreCase))
                                 {
                                     string binding;
-                                    if (string.Equals(btn_name_lower,"left_trigger", StringComparison.OrdinalIgnoreCase))
+                                    if (string.Equals(btn_name_lower, "left_trigger",
+                                            StringComparison.OrdinalIgnoreCase))
                                         binding = "DLTRIGGER";
                                     else
                                         binding = "DRTRIGGER";
@@ -1280,7 +1282,7 @@ internal class GeneratorSteamClient : Generator
                     if (supported_keys_joystick.Contains(btn_name_lower))
                     {
                         var group = groups_by_id[group_number];
-                        string group_mode = ToStringSafe(GetKeyIgnoreCase(group, "mode"));
+                        var group_mode = ToStringSafe(GetKeyIgnoreCase(group, "mode"));
                         if (group_mode.Equals("joystick_move", StringComparison.OrdinalIgnoreCase))
                         {
                             foreach (var groupProp in group)
@@ -1303,9 +1305,9 @@ internal class GeneratorSteamClient : Generator
                                 {
                                     var action_name = ToStringSafe(GetKeyIgnoreCase(groupProp.Value, preset_name));
                                     string binding;
-                                    if (string.Equals(btn_name_lower,"joystick", StringComparison.OrdinalIgnoreCase))
+                                    if (string.Equals(btn_name_lower, "joystick", StringComparison.OrdinalIgnoreCase))
                                         binding = "LJOY";
-                                    else if (string.Equals(btn_name_lower,"right_joystick",
+                                    else if (string.Equals(btn_name_lower, "right_joystick",
                                                  StringComparison.OrdinalIgnoreCase))
                                         binding = "RJOY";
                                     else
@@ -1336,7 +1338,8 @@ internal class GeneratorSteamClient : Generator
                         {
                             if (string.Equals(btn_name_lower, "joystick", StringComparison.OrdinalIgnoreCase))
                                 AddInputBindings(bindings_map, group, keymap_left_joystick);
-                            else if (string.Equals(btn_name_lower, "right_joystick", StringComparison.OrdinalIgnoreCase))
+                            else if (string.Equals(btn_name_lower, "right_joystick",
+                                         StringComparison.OrdinalIgnoreCase))
                                 AddInputBindings(bindings_map, group, keymap_right_joystick);
                             // dpad 
                         }
@@ -1384,7 +1387,7 @@ internal class GeneratorSteamClient : Generator
                 _log.Debug("No Controller Info, Skipping...");
                 return;
             }
-                
+
 
             var supportedCons = GameInfoConfig["steamcontrollerconfigdetails"].Children.Where(
                 c => supported_controllers_types.Contains(c["controller_type"].Value)
@@ -1410,7 +1413,8 @@ internal class GeneratorSteamClient : Generator
                 return;
             }
 
-            _log.Debug("Downloading controller vdf file {id} (Type: {type})...", con.Name, con["controller_type"].Value);
+            _log.Debug("Downloading controller vdf file {id} (Type: {type})...", con.Name,
+                con["controller_type"].Value);
             var controller_vdf = await DownloadPubfileAsync(Convert.ToUInt64(con.Name));
             using (var vdfStream = new MemoryStream(controller_vdf, false))
             {
