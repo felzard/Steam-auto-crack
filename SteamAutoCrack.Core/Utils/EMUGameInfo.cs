@@ -1,7 +1,9 @@
 ﻿#pragma warning disable CS4014
 
 using System.ComponentModel;
+using System.Globalization;
 using System.Net;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -9,6 +11,7 @@ using System.Text.Json.Serialization;
 using IniFile;
 using Serilog;
 using SteamKit2;
+using ValveKeyValue;
 using static SteamAutoCrack.Core.Utils.EMUGameInfoConfig;
 using Section = IniFile.Section;
 
@@ -192,13 +195,14 @@ internal abstract class Generator
                     Directory.Delete(ConfigPath, true);
                     _log.Debug("Deleted previous steam_settings folder.");
                 }
+
                 Directory.CreateDirectory(ConfigPath);
                 _log.Debug("Created steam_settings folder.");
-               
             }
             catch (UnauthorizedAccessException ex)
             {
-                _log.Error(ex, "Failed to access steam_settings path. (Try run SteamAutoCrack with administrative rights)");
+                _log.Error(ex,
+                    "Failed to access steam_settings path. (Try run SteamAutoCrack with administrative rights)");
                 throw new Exception("Failed to access steam_settings path.");
             }
             catch (Exception ex)
@@ -435,7 +439,8 @@ internal abstract class Generator
                     var defaultValue = "";
 
                     if (stat.TryGetProperty("name", out var _name)) name = _name.GetString();
-                    if (stat.TryGetProperty("defaultvalue", out var _defaultvalue)) defaultValue = _defaultvalue.ToString();
+                    if (stat.TryGetProperty("defaultvalue", out var _defaultvalue))
+                        defaultValue = _defaultvalue.ToString();
                     sw.Write(newline + name + "=int=" + defaultValue);
                     newline = Environment.NewLine;
                     Count++;
@@ -550,6 +555,31 @@ internal class GeneratorSteamClient : Generator
     {
     }
 
+    private async Task<MemoryStream> DownloadPubfileAsync(uint appId, ulong publishedFileId)
+    {
+        var details = await steam3.GetPublishedFileDetails(appId, publishedFileId);
+
+        if (!string.IsNullOrEmpty(details?.file_url))
+            return await DownloadWebFile(appId, details.filename, details.file_url);
+
+        _log.Warning("Publish File {id} doesn't contain file_url.", publishedFileId);
+        throw new Exception("Unable to download publish file.");
+    }
+
+    private async Task<MemoryStream> DownloadWebFile(uint appId, string fileName, string url)
+    {
+        using (var client = HttpClientFactory.CreateHttpClient())
+        {
+            _log.Debug("Downloading {0}", fileName);
+            var responseStream = await client.GetStreamAsync(url);
+            using (var memoryStream = new MemoryStream())
+            {
+                await responseStream.CopyToAsync(memoryStream);
+                return memoryStream;
+            }
+        }
+    }
+
     private async Task Steam3Start()
     {
         await Task.Run(() =>
@@ -584,32 +614,19 @@ internal class GeneratorSteamClient : Generator
             {
                 if (steam3 == null || steam3.AppInfo == null) return null;
 
-                SteamApps.PICSProductInfoCallback.PICSProductInfo? app;
-                if (!steam3.AppInfo.TryGetValue(appId, out app) || app == null) return null;
+                if (!steam3.AppInfo.TryGetValue(appId, out var app) || app == null) return null;
 
                 var appinfo = app.KeyValues;
-                string section_key;
-
-                switch (section)
+                var section_key = section switch
                 {
-                    case EAppInfoSection.Common:
-                        section_key = "common";
-                        break;
-                    case EAppInfoSection.Extended:
-                        section_key = "extended";
-                        break;
-                    case EAppInfoSection.Config:
-                        section_key = "config";
-                        break;
-                    case EAppInfoSection.Depots:
-                        section_key = "depots";
-                        break;
-                    default:
-                        throw new NotImplementedException();
-                }
-
+                    EAppInfoSection.Common => "common",
+                    EAppInfoSection.Extended => "extended",
+                    EAppInfoSection.Config => "config",
+                    EAppInfoSection.Depots => "depots",
+                    _ => throw new NotImplementedException()
+                };
                 var section_kv = appinfo.Children.Where(c => c.Name == section_key).FirstOrDefault();
-                return section_kv ?? KeyValue.Invalid;
+                return section_kv;
             }
             catch (Exception ex)
             {
@@ -617,6 +634,791 @@ internal class GeneratorSteamClient : Generator
                 throw new Exception("Failed to get Steam3 App Section.");
             }
         });
+    }
+
+    private async Task GenerateControllerInfo()
+    {
+        var controllerFolder = Path.Combine(ConfigPath, "controller");
+        string[] supported_controllers_types =
+        [ // in order of preference
+            "controller_xbox360",
+            "controller_xboxone",
+            "controller_steamcontroller_gordon",
+
+            // TODO not sure about these
+            "controller_ps4",
+            "controller_ps5",
+            "controller_switch_pro",
+            "controller_neptune"
+        ];
+
+        Dictionary<string, string> keymap_digital = new()
+        {
+            { "button_a", "A" },
+            { "button_b", "B" },
+            { "button_x", "X" },
+            { "button_y", "Y" },
+            { "dpad_north", "DUP" },
+            { "dpad_south", "DDOWN" },
+            { "dpad_east", "DRIGHT" },
+            { "dpad_west", "DLEFT" },
+            { "button_escape", "START" },
+            { "button_menu", "BACK" },
+            { "left_bumper", "LBUMPER" },
+            { "right_bumper", "RBUMPER" },
+            { "button_back_left", "Y" },
+            { "button_back_right", "A" },
+            { "button_back_left_upper", "X" },
+            { "button_back_right_upper", "B" }
+        };
+        Dictionary<string, string> keymap_left_joystick = new()
+        {
+            { "dpad_north", "DLJOYUP" },
+            { "dpad_south", "DLJOYDOWN" },
+            { "dpad_west", "DLJOYLEFT" },
+            { "dpad_east", "DLJOYRIGHT" },
+            { "click", "LSTICK" }
+        };
+        Dictionary<string, string> keymap_right_joystick = new()
+        {
+            { "dpad_north", "DRJOYUP" },
+            { "dpad_south", "DRJOYDOWN" },
+            { "dpad_west", "DRJOYLEFT" },
+            { "dpad_east", "DRJOYRIGHT" },
+            { "click", "RSTICK" }
+        };
+
+        // these are found in "group_source_bindings"
+        HashSet<string> supported_keys_digital =
+        [
+            "switch",
+            "button_diamond",
+            "dpad"
+        ];
+        HashSet<string> supported_keys_triggers =
+        [
+            "left_trigger",
+            "right_trigger"
+        ];
+        HashSet<string> supported_keys_joystick =
+        [
+            "joystick",
+            "right_joystick",
+            "dpad"
+        ];
+
+        JsonObject LoadBinaryVdf(Stream inStream)
+        {
+            ArgumentNullException.ThrowIfNull(inStream);
+            var format = KVSerializationFormat.KeyValues1Binary;
+            var kv = KVSerializer.Create(format);
+            var vdfDataDoc = kv.Deserialize(inStream, new KVSerializerOptions
+            {
+                EnableValveNullByteBugBehavior = true
+            });
+
+            return ToJsonObj(vdfDataDoc);
+        }
+
+        JsonObject ToJsonObj(KVObject? vdfKeyValue)
+        {
+            if (vdfKeyValue is null) return new JsonObject();
+
+            JsonObject rootJobj = new();
+            Queue<(KVObject kvPair, JsonObject myJobj)> pending = new([
+                (vdfKeyValue, rootJobj)
+            ]);
+
+            JsonNode? SingleVdfKvToJobj(KVValue val)
+            {
+                switch (val.ValueType)
+                {
+                    case KVValueType.Null:
+                        return null;
+                    case KVValueType.Collection:
+                        return JsonNode.Parse("{}");
+                    case KVValueType.Array:
+                        return JsonNode.Parse("[]");
+                    case KVValueType.BinaryBlob:
+                        return JsonNode.Parse("[]");
+                    case KVValueType.String:
+                        return (string?)val ?? string.Empty;
+                    case KVValueType.Int32:
+                        return (int)val;
+                    case KVValueType.UInt64:
+                        return (ulong)val;
+                    case KVValueType.FloatingPoint:
+                        return (double)val;
+                    case KVValueType.Pointer:
+                        return (ulong)val;
+                    case KVValueType.Int64:
+                        return (long)val;
+                    case KVValueType.Boolean:
+                        return (bool)val;
+                    default:
+                        return val.ToString();
+                }
+            }
+
+            while (pending.Count > 0)
+            {
+                var (kv, currentObj) = pending.Dequeue();
+                var nameSafe = kv.Name is null ? string.Empty : kv.Name;
+                if (!kv.Children.Any()) // regular "key" : "value"
+                {
+                    if (currentObj.TryGetPropertyValue(nameSafe, out var oldVal)) // name exists
+                    {
+                        if (oldVal is null) // convert it to array
+                        {
+                            /* "some_prop": null
+                             *
+                             * >>>
+                             *
+                             * "some_prop": [
+                             *  null,
+                             *  <new value here>
+                             * ]
+                             */
+                            currentObj.Remove(nameSafe);
+                            currentObj[nameSafe] = new JsonArray(null, SingleVdfKvToJobj(kv.Value));
+                        }
+                        else if (oldVal.GetValueKind() == JsonValueKind.Array) // previously converted
+                        {
+                            oldVal.AsArray().Add(kv.Value);
+                        }
+                        else // convert it to array
+                        {
+                            /* "some_prop": "old value"
+                             *
+                             * >>>
+                             *
+                             * "some_prop": [
+                             *  "old value",
+                             *  <new value here>
+                             * ]
+                             */
+                            currentObj.Remove(nameSafe);
+                            currentObj[nameSafe] = new JsonArray(oldVal, SingleVdfKvToJobj(kv.Value));
+                        }
+                    }
+                    else // new name
+                    {
+                        currentObj[nameSafe] = SingleVdfKvToJobj(kv.Value);
+                    }
+                }
+                else // nested object "key" : { ... }
+                {
+                    JsonObject newObj = new(); // new container for the key/value pairs
+
+                    if (currentObj.TryGetPropertyValue(nameSafe, out var oldNode) && oldNode is not null)
+                    {
+                        // if key already exists then convert the parent container to array of objects
+                        /*
+                         * "controller_mappings": {
+                         *  "group": {},                // ===== 1
+                         * }
+                         *
+                         * >>>
+                         *
+                         * "controller_mappings": {
+                         *  "group": [                  // ==== 2
+                         *    {},
+                         *    {},
+                         *    {},
+                         *  ]
+                         * }
+                         *
+                         */
+                        if (oldNode.GetValueKind() == JsonValueKind.Object) // ===== 1
+                        {
+                            // convert it to array
+                            currentObj.Remove(nameSafe);
+                            currentObj[nameSafe] = new JsonArray(oldNode, newObj); // ==== 2
+                        }
+                        else // already converted to array
+                        {
+                            oldNode.AsArray().Add(newObj);
+                        }
+                    }
+                    else // entirely new key, start as an object/dictionary
+                    {
+                        currentObj[nameSafe] = newObj;
+                    }
+
+                    // add all nested elements for the next iterations
+                    foreach (var item in kv.Children)
+                        // the owner of element will be this new json object
+                        pending.Enqueue((item, newObj));
+                }
+            }
+
+            return rootJobj;
+        }
+
+        bool ToBoolSafe(JsonNode? obj)
+        {
+            if (obj is null) return false;
+
+            switch (obj.GetValueKind())
+            {
+                case JsonValueKind.String:
+                {
+                    var str = obj.ToString();
+                    if (string.IsNullOrEmpty(str)) return false;
+                    return str.Equals("true", StringComparison.OrdinalIgnoreCase)
+                           || str.Equals("1", StringComparison.Ordinal);
+                }
+                case JsonValueKind.Number:
+                {
+                    if (double.TryParse(obj.ToString() ?? string.Empty, CultureInfo.InvariantCulture, out var num) &&
+                        !double.IsNaN(num))
+                    {
+                        const double ZERO_THRESHOLD = 1e-10;
+                        return Math.Abs(num) >= ZERO_THRESHOLD;
+                    }
+                }
+                    break;
+                case JsonValueKind.True: return true;
+            }
+
+            return false;
+        }
+
+        JsonArray ToArraySafe(JsonNode? obj)
+        {
+            if (obj is null) return [];
+
+            switch (obj.GetValueKind())
+            {
+                case JsonValueKind.Array: return obj.AsArray();
+            }
+
+            return [];
+        }
+
+        JsonObject ToObjSafe(JsonNode? obj)
+        {
+            if (obj is null) return new JsonObject();
+
+            switch (obj.GetValueKind())
+            {
+                case JsonValueKind.Object: return obj.AsObject();
+            }
+
+            return new JsonObject();
+        }
+
+        string ToStringSafe(JsonNode? obj)
+        {
+            if (obj is null) return string.Empty;
+
+            switch (obj.GetValueKind())
+            {
+                case JsonValueKind.String: return obj.ToString() ?? string.Empty;
+            }
+
+            return string.Empty;
+        }
+
+        double ToNumSafe(JsonNode? obj)
+        {
+            if (obj is null) return 0;
+
+            switch (obj.GetValueKind())
+            {
+                case JsonValueKind.String:
+                case JsonValueKind.Number:
+                {
+                    if (double.TryParse(obj.ToString() ?? string.Empty, CultureInfo.InvariantCulture, out var num) &&
+                        !double.IsNaN(num)) return num;
+                }
+                    break;
+                case JsonValueKind.True: return 1;
+            }
+
+            return 0;
+        }
+
+        JsonArray ToVdfArraySafe(JsonNode? node)
+        {
+            if (node is null) return [];
+
+            switch (node.GetValueKind())
+            {
+                case JsonValueKind.Array:
+                    return node.AsArray();
+            }
+
+            return [node.DeepClone()];
+        }
+
+
+        JsonNode? GetKeyIgnoreCase(JsonNode? obj, params string[] keys)
+        {
+            if (keys is null || keys.Length == 0) return null;
+
+            var idx = 0;
+            while (idx < keys.Length)
+            {
+                if (obj is null || obj.GetValueKind() != JsonValueKind.Object) return null;
+
+                var currentObj = obj.AsObject();
+                var objDict = currentObj
+                    .GroupBy(kv => kv.Key.ToUpperInvariant(),
+                        kv => (ActualKey: kv.Key, ActualObj: kv.Value)) // upper key <> [list of actual values]
+                    .ToDictionary(g => g.Key, g => g.ToList());
+                var currentKey = keys[idx];
+                if (objDict.Count == 0 || !objDict.TryGetValue(currentKey.ToUpperInvariant(), out var objList) ||
+                    objList.Count == 0) return null;
+
+                obj = null;
+                foreach (var (actualKey, actualObj) in objList)
+                    if (string.Equals(currentKey, actualKey, StringComparison.Ordinal))
+                    {
+                        obj = actualObj;
+                        break;
+                    }
+
+                idx++;
+            }
+
+            return obj;
+        }
+
+        void AddInputBindings(Dictionary<string, HashSet<string>> actions_bindings, JsonObject group,
+            IReadOnlyDictionary<string, string> keymap, string? forced_btn_mapping = null)
+        {
+            var inputs = ToVdfArraySafe(GetKeyIgnoreCase(group, "inputs"));
+            foreach (var inputObj in inputs)
+            foreach (var btnKv in ToObjSafe(inputObj)) // "left_bumper", "button_back_left", ...
+            foreach (var btnObj in ToVdfArraySafe(btnKv.Value))
+            foreach (var btnPropKv in ToObjSafe(btnObj)) // "activators", ...
+            foreach (var btnPropObj in ToVdfArraySafe(btnPropKv.Value))
+            foreach (var btnPressTypeKv in ToObjSafe(btnPropObj)) // "Full_Press", ...
+            foreach (var btnPressTypeObj in ToVdfArraySafe(btnPressTypeKv.Value))
+            foreach (var pressTypePropsKv in ToObjSafe(btnPressTypeObj)) // "bindings", ...
+            foreach (var pressTypePropsObj in ToVdfArraySafe(pressTypePropsKv.Value))
+            foreach (var bindingKv in ToObjSafe(pressTypePropsObj)) // "binding", ...
+            {
+                if (!bindingKv.Key.Equals("binding", StringComparison.OrdinalIgnoreCase)) continue;
+
+                /*
+                 * ex1:
+                 * "binding": [
+                 *   "game_action ui ui_advpage0, Route Advisor Navigation Page",
+                 *   "game_action ui ui_mapzoom_out, Map Zoom Out"
+                 * ]   ^          ^       ^
+                 *     ^       category   ^
+                 *     type               action name
+                 *
+                 * ex2:
+                 * "binding": [
+                 *   "xinput_button TRIGGER_LEFT, Brake/Reverse"
+                 * ]   ^              ^
+                 *     ^              ^
+                 *     type           action name
+                 *
+                 * 1. split and trim each string => string[]
+                 * 2. save each string[]         => List<string[]>
+                 */
+                // each string is composed of:
+                //   1. binding type, ex: "game_action", "xinput_button", ...
+                //   2. (optional) action category, ex: "ui", should be from one of the previously parsed action list
+                //   3. action name, ex: "ui_mapzoom_out" or "TRIGGER_LEFT"
+                var current_btn_name = btnKv.Key; // "left_bumper", "button_back_left", ...
+
+                var binding_instructions_lists = ToVdfArraySafe(bindingKv.Value)
+                    .Select(obj => ToStringSafe(obj))
+                    .Select(str =>
+                        str.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(element => element.Trim())
+                            .ToArray()
+                    )
+                    .Where(list => list.Length > 1); // we need at least the instruction
+
+                //Log.Instance.Write(Log.Kind.Debug, $"button '{current_btn_name}' has [{binding_instructions_lists.Count()}] binding instructions (group/.../activators/Full_Press/bindings/binding/[ <INSTRUCTIONS_LIST> ])");
+                foreach (var binding_instructions in binding_instructions_lists)
+                {
+                    var binding_type = binding_instructions[0];
+                    string? action_name = null;
+                    if (binding_type.Equals("game_action", StringComparison.OrdinalIgnoreCase) &&
+                        binding_instructions.Length >= 3)
+                        action_name = binding_instructions[2]; // ex: "ui_mapzoom_out,"
+                    else if (binding_type.Equals("xinput_button", StringComparison.OrdinalIgnoreCase) &&
+                             binding_instructions.Length >= 2)
+                        action_name = binding_instructions[1]; // ex: "TRIGGER_LEFT,"
+
+                    if (action_name is null)
+                    {
+                        _log.Debug(
+                            $"unsupported binding type '{binding_type}' in button '{current_btn_name}' (group/.../activators/Full_Press/bindings/binding/['<BINDING_TYPE> ...'])");
+                        continue;
+                    }
+
+                    if (action_name.Last() == ',') action_name = action_name.Substring(0, action_name.Length - 1);
+
+                    string? btn_binding = null;
+                    if (forced_btn_mapping is null)
+                    {
+                        if (keymap.TryGetValue(current_btn_name.ToLowerInvariant(), out var mapped_btn_binding))
+                        {
+                            btn_binding = mapped_btn_binding;
+                        }
+                        else
+                        {
+                            _log.Debug($"keymap is missing button '{current_btn_name}'");
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        btn_binding = forced_btn_mapping;
+                    }
+
+                    if (btn_binding is not null)
+                    {
+                        HashSet<string>? action_bindings_set;
+                        if (!actions_bindings.TryGetValue(action_name, out action_bindings_set))
+                        {
+                            action_bindings_set = [];
+                            actions_bindings[action_name] = action_bindings_set;
+                        }
+
+                        action_bindings_set.Add(btn_binding);
+                    }
+                    else
+                    {
+                        _log.Debug($"missing keymap for btn '{current_btn_name}' (group/inputs/<BTN_NAME>)");
+                    }
+                }
+            }
+        }
+
+        void SaveControllerVdfObj(JsonObject con)
+        {
+            var controller_mappings = ToObjSafe(GetKeyIgnoreCase(con, "controller_mappings"));
+
+            var groups = ToVdfArraySafe(GetKeyIgnoreCase(controller_mappings, "group"));
+            var actions = ToVdfArraySafe(GetKeyIgnoreCase(controller_mappings, "actions"));
+            var presets = ToVdfArraySafe(GetKeyIgnoreCase(controller_mappings, "preset"));
+
+            // each group defines the controller key and its binding
+            var groups_by_id = groups
+                .Select(g => new KeyValuePair<uint, JsonObject>(
+                    (uint)ToNumSafe(GetKeyIgnoreCase(g, "id")), ToObjSafe(g)
+                ))
+                .ToDictionary(kv => kv.Key, kv => kv.Value)
+                .AsReadOnly();
+
+            // list of supported actions
+            /*
+             * ex:
+             * "actions": {
+             *   "ui": { ... },
+             *   "driving": { ... }
+             * },
+             */
+            var supported_actions_list = actions
+                .SelectMany(a => ToObjSafe(a))
+                .Select(kv => kv.Key.ToUpperInvariant())
+                .ToHashSet();
+
+            /*
+             * ex:
+             * {   preset name
+             *     /
+             *   "ui": {
+             *     "ui_advpage0": ["LJOY=joystick_move"],
+             *        ^                 ^
+             *       action name        ^
+             *                         action bindings set
+             *     ...
+             *     ...
+             *   },
+             *
+             *   "driving": {
+             *     "driving_abackward": ["LBUMPER"],
+             *     ...
+             *     ...
+             *   },
+             *
+             *   ...
+             *   ...
+             * }
+             */
+            var presets_actions_bindings = new Dictionary<string, Dictionary<string, HashSet<string>>>();
+
+            /*
+             * "id": 0,
+             * "name": "ui",
+             * "group_source_bindings": {
+             *   "13": "switch active",
+             *   "16": "right_trigger active",
+             *   "65": "joystick active",
+             *   "15": "left_trigger active",
+             *   "60": "right_joystick inactive",
+             *   "66": "right_joystick active"
+             * }
+             *
+             * each preset has:
+             *   1. action name, could be in the previous list or a standalone/new one
+             *   2. the key bindings (groups) of this preset
+             *      * each key binding entry is a key-value pair:
+             *        <group ID> - <button_name SPACE active/inactive>
+             *  also notice how the last 2 key-value pairs define the same "right_joystick",
+             *  but one is active (ID=66) and the other is inactive (ID=60)
+             */
+            foreach (var presetObj in presets)
+            {
+                var preset_name = ToStringSafe(GetKeyIgnoreCase(presetObj, "name"));
+                // find this preset in the parsed actions list
+                if (!supported_actions_list.Contains(preset_name.ToUpperInvariant()) &&
+                    !preset_name.Equals("default", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var group_source_bindings = ToObjSafe(GetKeyIgnoreCase(presetObj, "group_source_bindings"));
+                var bindings_map = new Dictionary<string, HashSet<string>>();
+                foreach (var group_source_binding_kv in group_source_bindings)
+                {
+                    uint group_number = 0;
+                    if (!uint.TryParse(group_source_binding_kv.Key, CultureInfo.InvariantCulture, out group_number)
+                        || !groups_by_id.ContainsKey(group_number))
+                    {
+                        _log.Debug(
+                            $"group_source_bindings with ID '{group_source_binding_kv.Key}' has bad number");
+                        continue;
+                    }
+
+                    var group_source_binding_elements = ToStringSafe(group_source_binding_kv.Value)
+                        .Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(str => str.Trim())
+                        .ToArray();
+                    /*
+                     * "group_source_bindings": {
+                     *   "10": "switch active",
+                     *   "11": "button_diamond active",
+                     *   "12": "left_trigger inactive",
+                     *   "18": "left_trigger active",
+                     *   "13": "right_trigger inactive",
+                     *   "19": "right_trigger active",
+                     *   "14": "right_joystick active",
+                     *   "15": "dpad inactive",
+                     *   "16": "dpad active",
+                     *   "17": "joystick active",
+                     *   "21": "left_trackpad active",
+                     *   "20": "right_trackpad active"
+                     * }
+                     */
+                    if (group_source_binding_elements.Length < 2 || !group_source_binding_elements[1]
+                            .Equals("active", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    // ex: "button_diamond", "right_trigger", "dpad" ...
+                    var btn_name_lower = group_source_binding_elements[0].ToLowerInvariant();
+                    if (supported_keys_digital.Contains(btn_name_lower))
+                    {
+                        var group = groups_by_id[group_number];
+                        AddInputBindings(bindings_map, group, keymap_digital);
+                    }
+
+                    if (supported_keys_triggers.Contains(btn_name_lower))
+                    {
+                        var group = groups_by_id[group_number];
+                        string group_mode = ToStringSafe(GetKeyIgnoreCase(group, "mode"));
+                        if (group_mode.Equals("trigger", StringComparison.OrdinalIgnoreCase))
+                        {
+                            foreach (var groupProp in group)
+                                /*
+                                 * "group": [
+                                 *   {
+                                 *     "id": 36,
+                                 *     "mode": "trigger",
+                                 *     "inputs": {
+                                 *       ...
+                                 *     }
+                                 *     ...
+                                 *     "gameactions": {
+                                 *       "driving": "driving_abackward"
+                                 *     }               ^
+                                 *                     ^
+                                 *     ...           action name
+                                 *   }
+                                 */
+                                if (groupProp.Key.Equals("gameactions", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    // ex: action_name = "driving_abackward"
+                                    var action_name = ToStringSafe(GetKeyIgnoreCase(groupProp.Value, preset_name));
+                                    string binding;
+                                    if (string.Equals(btn_name_lower, "left_trigger", StringComparison.OrdinalIgnoreCase))
+                                        binding = "LTRIGGER";
+                                    else
+                                        binding = "RTRIGGER";
+
+                                    var binding_with_trigger = $"{binding}=trigger";
+                                    if (bindings_map.TryGetValue(action_name, out var action_set))
+                                    {
+                                        if (!action_set.Contains(binding) && !action_set.Contains(binding_with_trigger))
+                                            action_set.Add(binding);
+                                    }
+                                    else
+                                    {
+                                        bindings_map[action_name] = [binding_with_trigger];
+                                    }
+                                }
+                                else if (groupProp.Key.Equals("inputs", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    string binding;
+                                    if (string.Equals(btn_name_lower,"left_trigger", StringComparison.OrdinalIgnoreCase))
+                                        binding = "DLTRIGGER";
+                                    else
+                                        binding = "DRTRIGGER";
+                                    AddInputBindings(bindings_map, group, keymap_digital, binding);
+                                }
+                        }
+                        else
+                        {
+                            _log.Debug(
+                                $"group with ID [{group_number}] has unknown trigger mode '{group_mode}'");
+                        }
+                    }
+
+                    if (supported_keys_joystick.Contains(btn_name_lower))
+                    {
+                        var group = groups_by_id[group_number];
+                        string group_mode = ToStringSafe(GetKeyIgnoreCase(group, "mode"));
+                        if (group_mode.Equals("joystick_move", StringComparison.OrdinalIgnoreCase))
+                        {
+                            foreach (var groupProp in group)
+                                /*
+                                 * "group": [
+                                 *   {
+                                 *     "id": 36,
+                                 *     "mode": "trigger",
+                                 *     "inputs": {
+                                 *       ...
+                                 *     }
+                                 *     ...
+                                 *     "gameactions": {
+                                 *       "driving": "driving_abackward"
+                                 *     }
+                                 *     ...
+                                 *   }
+                                 */
+                                if (groupProp.Key.Equals("gameactions", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var action_name = ToStringSafe(GetKeyIgnoreCase(groupProp.Value, preset_name));
+                                    string binding;
+                                    if (string.Equals(btn_name_lower,"joystick", StringComparison.OrdinalIgnoreCase))
+                                        binding = "LJOY";
+                                    else if (string.Equals(btn_name_lower,"right_joystick",
+                                                 StringComparison.OrdinalIgnoreCase))
+                                        binding = "RJOY";
+                                    else
+                                        binding = "DPAD";
+
+                                    var binding_with_joystick = $"{binding}=joystick_move";
+                                    if (bindings_map.TryGetValue(action_name, out var action_set))
+                                    {
+                                        if (!action_set.Contains(binding) &&
+                                            !action_set.Contains(binding_with_joystick)) action_set.Add(binding);
+                                    }
+                                    else
+                                    {
+                                        bindings_map[action_name] = [binding_with_joystick];
+                                    }
+                                }
+                                else if (groupProp.Key.Equals("inputs", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    string binding;
+                                    if (string.Equals(btn_name_lower, "joystick", StringComparison.OrdinalIgnoreCase))
+                                        binding = "LSTICK";
+                                    else
+                                        binding = "RSTICK";
+                                    AddInputBindings(bindings_map, group, keymap_digital, binding);
+                                }
+                        }
+                        else if (group_mode.Equals("dpad", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (string.Equals(btn_name_lower, "joystick", StringComparison.OrdinalIgnoreCase))
+                                AddInputBindings(bindings_map, group, keymap_left_joystick);
+                            else if (string.Equals(btn_name_lower, "right_joystick", StringComparison.OrdinalIgnoreCase))
+                                AddInputBindings(bindings_map, group, keymap_right_joystick);
+                            // dpad 
+                        }
+                        else
+                        {
+                            _log.Debug($"group with ID [{group_number}] has unknown joystick mode '{group_mode}'");
+                        }
+                    }
+                }
+
+                presets_actions_bindings[preset_name] = bindings_map;
+            }
+
+            if (presets_actions_bindings.Count > 0)
+            {
+                Directory.CreateDirectory(controllerFolder);
+                foreach (var (presetName, presetObj) in presets_actions_bindings)
+                {
+                    List<string> filecontent = [];
+                    foreach (var (actionName, actionBindingsSet) in presetObj)
+                        filecontent.Add($"{actionName}={string.Join(',', actionBindingsSet)}");
+
+                    var filepath = Path.Combine(controllerFolder, $"{presetName}.txt");
+                    File.WriteAllLines(filepath, filecontent, new UTF8Encoding(false));
+                }
+            }
+            else
+            {
+                _log.Warning("No supported controller presets were found");
+            }
+        }
+
+        try
+        {
+            _log.Debug("Generating Controller Info...");
+            var GameInfoConfig = await GetSteam3AppSection(AppID, EAppInfoSection.Config).ConfigureAwait(false);
+            if (GameInfoConfig == null)
+            {
+                _log.Warning("Failed to get controller info, skipping...(AppID: {appid})", AppID);
+                return;
+            }
+
+            if (GameInfoConfig["steamcontrollerconfigdetails"] == KeyValue.Invalid)
+                _log.Debug("No Controller Info, Skipping...");
+
+            var supportedCons = GameInfoConfig["steamcontrollerconfigdetails"].Children.Where(
+                c => supported_controllers_types.Contains(c["controller_type"].Value)
+                     && c["enabled_branches"].Value.Split(",")
+                         .Any(br => br.Equals("default", StringComparison.OrdinalIgnoreCase)));
+
+            KeyValue? con = null;
+            foreach (var item in supported_controllers_types)
+            {
+                foreach (var supportedCon in supportedCons)
+                    if (supportedCon["controller_type"].Value.Equals(item, StringComparison.OrdinalIgnoreCase))
+                    {
+                        con = supportedCon;
+                        break;
+                    }
+
+                if (con != null) break;
+            }
+
+            if (con == null)
+            {
+                _log.Warning("Failed to get supported controller info, skipping...(AppID: {appid})", AppID);
+                return;
+            }
+
+            _log.Debug("Downloading controller vdf file {id} (Type: {type})...", con.Name, con["controller_type"].Value);
+            var controller_vdf = await DownloadPubfileAsync(AppID, Convert.ToUInt64(con.Name));
+            var controller_vdf_json = LoadBinaryVdf(controller_vdf);
+
+            _log.Debug("Generated Controller Info.");
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(ex, "Failed to generate controller info.");
+        }
     }
 
     private async Task GenerateSupportedLang()
@@ -747,9 +1549,11 @@ internal class GeneratorSteamClient : Generator
                 if (GameInfoDLCs["listofdlc"].Value != null)
                 {
                     DLCIds.AddRange(
-                        new List<string>(GameInfoDLCs["listofdlc"].Value?.Split(',')).ConvertAll(x => Convert.ToUInt32(x)));
+                        new List<string>(GameInfoDLCs["listofdlc"].Value?.Split(',')).ConvertAll(x =>
+                            Convert.ToUInt32(x)));
                 }
-                else{
+                else
+                {
                     _log.Information("No DLC in Extended section, skipping...(AppID: {appid})", AppID);
                     return;
                 }
@@ -782,7 +1586,8 @@ internal class GeneratorSteamClient : Generator
 
                 var dlcsection = new Section("app::dlcs")
                 {
-                    new("unlock_all", "0", " 1=report all DLCs as unlocked", " 0=report only the DLCs mentioned",
+                    new Property("unlock_all", "0", " 1=report all DLCs as unlocked",
+                        " 0=report only the DLCs mentioned",
                         " some games check for \"hidden\" DLCs, hence this should be set to 1 in that case",
                         " but other games detect emus by querying for a fake/bad DLC, hence this should be set to 0 in that case",
                         " default=1")
@@ -826,7 +1631,8 @@ internal class GeneratorSteamClient : Generator
 
                 var dlcsection = new Section("app::dlcs")
                 {
-                    new("unlock_all", "0", " 1=report all DLCs as unlocked", " 0=report only the DLCs mentioned",
+                    new Property("unlock_all", "0", " 1=report all DLCs as unlocked",
+                        " 0=report only the DLCs mentioned",
                         " some games check for \"hidden\" DLCs, hence this should be set to 1 in that case",
                         " but other games detect emus by querying for a fake/bad DLC, hence this should be set to 0 in that case",
                         " default=1")
@@ -862,9 +1668,20 @@ internal class GeneratorSteamClient : Generator
     {
         try
         {
-            if (UseXan105API) _log.Debug("Using xan105 API, skipping generate inventory...");
+            if (UseXan105API)
+            {
+                _log.Debug("Using xan105 API, skipping generate inventory...");
+                return;
+            }
+
+            if (SteamWebAPIKey == string.Empty || SteamWebAPIKey == null)
+            {
+                _log.Warning("Empty Steam Web API Key, skipping generate inventory...");
+                return;
+            }
+
             _log.Debug("Generating inventory info...");
-            string digest = string.Empty;
+            var digest = string.Empty;
             using (var client = new HttpClient())
             {
                 _log.Debug("Getting inventory digest...");
@@ -937,15 +1754,10 @@ internal class GeneratorSteamClient : Generator
                                 var index = item?["itemdefid"]?.ToString();
 
                                 if (item != null)
-                                {
                                     foreach (var t in item.AsObject())
-                                    {
                                         if (t.Key != null && t.Value != null)
-                                        {
                                             x.Add(t.Key, t.Value.ToString());
-                                        }
-                                    }
-                                }
+
                                 inventory.Add(index, x);
                                 inventorydefault.Add(index, 1);
                             }
@@ -982,24 +1794,17 @@ internal class GeneratorSteamClient : Generator
 
     private async Task GetAppInfo(uint appID)
     {
-        await Task.Run(() => { steam3.RequestAppInfo(appID, true); }).ConfigureAwait(false);
+        await steam3.RequestAppInfo(appID, true).ConfigureAwait(false);
     }
 
     private async Task<bool> WaitForConnected()
     {
-        await Task.Run(() =>
-        {
-            steam3.WaitUntilCallback(() => { },
-                () => { return !steam3.bConnecting && steam3.bConnected && steam3.credentials.LoggedOn; });
-        });
+        if (steam3.IsLoggedOn || steam3.bAborted)
+            return steam3.IsLoggedOn;
 
-        if (steam3.bAborted)
-        {
-            _log.Information("Steam3 connection aborted, skipping generation...");
-            return false;
-        }
+        steam3.WaitUntilCallback(() => { }, () => steam3.IsLoggedOn);
 
-        return true;
+        return steam3.IsLoggedOn;
     }
 
     public override async Task InfoGenerator()
@@ -1025,7 +1830,10 @@ internal class GeneratorSteamClient : Generator
             {
                 await GetAppInfo(AppID).ConfigureAwait(false);
                 var Tasks1 = new List<Task>
-                    { GenerateSupportedLang(), GenerateDepots(), GenerateDLCs(), GenerateInventory() };
+                {
+                    GenerateSupportedLang(), GenerateDepots(), GenerateDLCs(), GenerateInventory(),
+                    GenerateControllerInfo()
+                };
                 while (Tasks1.Count > 0)
                 {
                     var finishedTask1 = await Task.WhenAny(Tasks1);
@@ -1089,7 +1897,7 @@ internal class GeneratorSteamWeb : Generator
 
             var dlcsection = new Section("app::dlcs")
             {
-                new("unlock_all", "0", " 1=report all DLCs as unlocked", " 0=report only the DLCs mentioned",
+                new Property("unlock_all", "0", " 1=report all DLCs as unlocked", " 0=report only the DLCs mentioned",
                     " some games check for \"hidden\" DLCs, hence this should be set to 1 in that case",
                     " but other games detect emus by querying for a fake/bad DLC, hence this should be set to 0 in that case",
                     " default=1")
@@ -1125,7 +1933,7 @@ internal class GeneratorSteamWeb : Generator
         {
             if (UseXan105API) _log.Debug("Using xan105 API, skipping generate inventory...");
             _log.Debug("Generating inventory info...");
-            string digest = string.Empty;
+            var digest = string.Empty;
             using (var client = new HttpClient())
             {
                 _log.Debug("Getting inventory digest...");
@@ -1198,15 +2006,10 @@ internal class GeneratorSteamWeb : Generator
                                 var index = item?["itemdefid"]?.ToString();
 
                                 if (item != null)
-                                {
                                     foreach (var t in item.AsObject())
-                                    {
                                         if (t.Key != null && t.Value != null)
-                                        {
                                             x.Add(t.Key, t.Value.ToString());
-                                        }
-                                    }
-                                }
+
                                 inventory.Add(index, x);
                                 inventorydefault.Add(index, 1);
                             }
