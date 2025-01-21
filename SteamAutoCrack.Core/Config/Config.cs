@@ -6,8 +6,7 @@ using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using SteamAutoCrack.Core.Utils;
-using SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils;
-using static SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils.SteamStubUnpackerConfig;
+using static SteamAutoCrack.Core.Utils.SteamStubUnpackerConfig;
 
 namespace SteamAutoCrack.Core.Config;
 

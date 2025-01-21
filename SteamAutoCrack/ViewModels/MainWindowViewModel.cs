@@ -6,7 +6,6 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using SteamAutoCrack.Core.Config;
 using SteamAutoCrack.Core.Utils;
-using SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils;
 
 namespace SteamAutoCrack.ViewModels;
 

@@ -1,5 +1,4 @@
 ﻿using Serilog;
-using SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils;
 
 namespace SteamAutoCrack.Core.Utils;
 

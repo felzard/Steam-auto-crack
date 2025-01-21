@@ -15,7 +15,6 @@ using Serilog;
 using Serilog.Events;
 using SteamAutoCrack.Core.Config;
 using SteamAutoCrack.Core.Utils;
-using SteamAutoCrack.Core.Utils.SteamAutoCrack.Core.Utils;
 using SteamAutoCrack.Properties;
 using SteamAutoCrack.Utils;
 using SteamAutoCrack.ViewModels;
