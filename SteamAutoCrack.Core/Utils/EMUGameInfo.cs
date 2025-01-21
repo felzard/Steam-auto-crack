@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using IniFile;
 using Serilog;
+using SteamAutoCrack.Core.Config;
 using SteamKit2;
 using ValveKeyValue;
 using static SteamAutoCrack.Core.Utils.EMUGameInfoConfig;
@@ -117,19 +118,13 @@ public class EMUGameInfo : IEMUGameInfo
         _log.Information("Generating game info...");
         try
         {
-            switch (GameInfoConfig.GameInfoAPI)
+            Generator = GameInfoConfig.GameInfoAPI switch
             {
-                case GeneratorGameInfoAPI.GeneratorSteamClient:
-                    Generator = new GeneratorSteamClient(GameInfoConfig);
-                    break;
-                case GeneratorGameInfoAPI.GeneratorSteamWeb:
-                    Generator = new GeneratorSteamWeb(GameInfoConfig);
-                    break;
-                case GeneratorGameInfoAPI.GeneratorOffline:
-                    Generator = new GeneratorOffline(GameInfoConfig);
-                    break;
-                default: throw new Exception("Invaild game info API.");
-            }
+                GeneratorGameInfoAPI.GeneratorSteamClient => new GeneratorSteamClient(GameInfoConfig),
+                GeneratorGameInfoAPI.GeneratorSteamWeb => new GeneratorSteamWeb(GameInfoConfig),
+                GeneratorGameInfoAPI.GeneratorOffline => new GeneratorOffline(GameInfoConfig),
+                _ => throw new Exception("Invalid game info API.")
+            };
         }
         catch (Exception ex)
         {
