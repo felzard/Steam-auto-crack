@@ -1380,7 +1380,11 @@ internal class GeneratorSteamClient : Generator
             }
 
             if (GameInfoConfig["steamcontrollerconfigdetails"] == KeyValue.Invalid)
+            {
                 _log.Debug("No Controller Info, Skipping...");
+                return;
+            }
+                
 
             var supportedCons = GameInfoConfig["steamcontrollerconfigdetails"].Children.Where(
                 c => supported_controllers_types.Contains(c["controller_type"].Value)
