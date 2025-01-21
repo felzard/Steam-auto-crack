@@ -555,28 +555,25 @@ internal class GeneratorSteamClient : Generator
     {
     }
 
-    private async Task<MemoryStream> DownloadPubfileAsync(uint appId, ulong publishedFileId)
+    private async Task<byte[]> DownloadPubfileAsync(ulong publishedFileId)
     {
-        var details = await steam3.GetPublishedFileDetails(appId, publishedFileId);
+        var details = await steam3.GetPublishedFileDetails(publishedFileId);
 
         if (!string.IsNullOrEmpty(details?.file_url))
-            return await DownloadWebFile(appId, details.filename, details.file_url);
+            return await DownloadWebFile(details.filename, details.file_url);
 
         _log.Warning("Publish File {id} doesn't contain file_url.", publishedFileId);
         throw new Exception("Unable to download publish file.");
     }
 
-    private async Task<MemoryStream> DownloadWebFile(uint appId, string fileName, string url)
+    private async Task<byte[]> DownloadWebFile(string fileName, string url)
     {
         using (var client = HttpClientFactory.CreateHttpClient())
         {
             _log.Debug("Downloading {0}", fileName);
-            var responseStream = await client.GetStreamAsync(url);
-            using (var memoryStream = new MemoryStream())
-            {
-                await responseStream.CopyToAsync(memoryStream);
-                return memoryStream;
-            }
+            using var response = await client.GetAsync(url).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
         }
     }
 
@@ -707,10 +704,10 @@ internal class GeneratorSteamClient : Generator
             "dpad"
         ];
 
-        JsonObject LoadBinaryVdf(Stream inStream)
+        JsonObject LoadTextVdf(Stream inStream)
         {
             ArgumentNullException.ThrowIfNull(inStream);
-            var format = KVSerializationFormat.KeyValues1Binary;
+            var format = KVSerializationFormat.KeyValues1Text;
             var kv = KVSerializer.Create(format);
             var vdfDataDoc = kv.Deserialize(inStream, new KVSerializerOptions
             {
@@ -1410,8 +1407,12 @@ internal class GeneratorSteamClient : Generator
             }
 
             _log.Debug("Downloading controller vdf file {id} (Type: {type})...", con.Name, con["controller_type"].Value);
-            var controller_vdf = await DownloadPubfileAsync(AppID, Convert.ToUInt64(con.Name));
-            var controller_vdf_json = LoadBinaryVdf(controller_vdf);
+            var controller_vdf = await DownloadPubfileAsync(Convert.ToUInt64(con.Name));
+            using (var vdfStream = new MemoryStream(controller_vdf, false))
+            {
+                var controller_vdf_json = LoadTextVdf(vdfStream);
+                SaveControllerVdfObj(controller_vdf_json);
+            }
 
             _log.Debug("Generated Controller Info.");
         }
