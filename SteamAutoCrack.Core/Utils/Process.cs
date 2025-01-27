@@ -84,6 +84,7 @@ public class Processor : IProcessor
             }
 
             _log.Information("All process completed.");
+            GC.Collect();
         }
         catch (Exception ex)
         {

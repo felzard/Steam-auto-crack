@@ -225,6 +225,7 @@ public class SteamStubUnpacker : ISteamStubUnpacker
             foreach (var p in steamlessPlugins)
                 if (p.CanProcessFile(path))
                 {
+                    GC.Collect();
                     if (await Task.Run(() => p.ProcessFile(path, steamlessOptions)))
                     {
                         bSuccess = true;
