@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Collections.ObjectModel;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using Serilog;
@@ -49,7 +48,6 @@ internal class HttpClientFactory
 
 internal class Steam3Session
 {
-    public bool IsLoggedOn { get; private set; }
     public delegate bool WaitCondition();
 
     private readonly ILogger _log;
@@ -82,7 +80,7 @@ internal class Steam3Session
     public SteamUser steamUser;
 
 
-    public Steam3Session(SteamUser.LogOnDetails details)
+    public Steam3Session(SteamUser.LogOnDetails details, CancellationToken cancellationToken = default)
     {
         _log = Log.ForContext<Steam3Session>();
         logonDetails = details;
@@ -105,13 +103,18 @@ internal class Steam3Session
         callbacks.Subscribe<SteamClient.DisconnectedCallback>(DisconnectedCallback);
         callbacks.Subscribe<SteamUser.LoggedOnCallback>(LogOnCallback);
 
-        Connect();
+        Connect(cancellationToken);
     }
+
+    public bool IsLoggedOn { get; private set; }
 
     public Dictionary<uint, ulong> AppTokens { get; } = [];
     public Dictionary<uint, ulong> PackageTokens { get; } = [];
     public Dictionary<uint, byte[]> DepotKeys { get; } = [];
-    public ConcurrentDictionary<(uint, string), TaskCompletionSource<SteamContent.CDNAuthToken>> CDNAuthTokens { get; } = [];
+
+    public ConcurrentDictionary<(uint, string), TaskCompletionSource<SteamContent.CDNAuthToken>>
+        CDNAuthTokens { get; } = [];
+
     public Dictionary<uint, SteamApps.PICSProductInfoCallback.PICSProductInfo> AppInfo { get; } = [];
     public Dictionary<uint, SteamApps.PICSProductInfoCallback.PICSProductInfo> PackageInfo { get; } = [];
     public Dictionary<string, byte[]> AppBetaPasswords { get; } = [];
@@ -155,18 +158,18 @@ internal class Steam3Session
 
         var details = await steamPublishedFile.GetDetails(pubFileRequest);
 
-        if (details.Result == EResult.OK)
-        {
-            return details.Body.publishedfiledetails.FirstOrDefault();
-        }
+        if (details.Result == EResult.OK) return details.Body.publishedfiledetails.FirstOrDefault();
 
-        throw new Exception($"EResult {(int)details.Result} ({details.Result}) while retrieving file details for pubfile {pubFile}.");
+        throw new Exception(
+            $"EResult {(int)details.Result} ({details.Result}) while retrieving file details for pubfile {pubFile}.");
     }
 
-    public bool WaitUntilCallback(Action submitter, WaitCondition waiter)
+    public bool WaitUntilCallback(Action submitter, WaitCondition waiter, CancellationToken cancellationToken = default)
     {
         while (!bAborted && !waiter())
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             lock (steamLock)
             {
                 submitter();
@@ -175,6 +178,8 @@ internal class Steam3Session
             var seq = this.seq;
             do
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 lock (steamLock)
                 {
                     callbacks.RunWaitCallbacks(TimeSpan.FromSeconds(1));
@@ -185,6 +190,7 @@ internal class Steam3Session
         return bAborted;
     }
 
+
     private void ResetConnectionFlags()
     {
         bExpectingDisconnectRemote = false;
@@ -192,7 +198,7 @@ internal class Steam3Session
         bIsConnectionRecovery = false;
     }
 
-    private void Connect()
+    private void Connect(CancellationToken cancellationToken = default)
     {
         _log.Debug("Connecting to Steam3...");
 
@@ -203,6 +209,12 @@ internal class Steam3Session
         ResetConnectionFlags();
 
         steamClient.Connect();
+
+        cancellationToken.Register(() =>
+        {
+            _log.Debug("Cancellation requested, disconnecting...");
+            Abort(false);
+        });
     }
 
     private void Abort(bool sendLogOff = true)

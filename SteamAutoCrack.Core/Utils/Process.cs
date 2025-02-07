@@ -4,7 +4,7 @@ namespace SteamAutoCrack.Core.Utils;
 
 public interface IProcessor
 {
-    public Task ProcessFileGUI();
+    public Task ProcessFileGUI(CancellationToken cancellationToken = default);
     public Task ProcessFileCLI();
 }
 
@@ -12,7 +12,7 @@ public class Processor : IProcessor
 {
     private static readonly ILogger _log = Log.ForContext<Processor>();
 
-    public async Task ProcessFileGUI()
+    public async Task ProcessFileGUI(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -43,9 +43,11 @@ public class Processor : IProcessor
             if (Config.Config.ProcessConfigs.GenerateEMUGameInfo)
             {
                 _log.Information("----- 1. Generate Goldberg Steam Emulator Game Info -----");
-                await new EMUGameInfo().Generate(eMUGameInfoConfig).ConfigureAwait(false);
+                await new EMUGameInfo().Generate(eMUGameInfoConfig, cancellationToken).ConfigureAwait(false);
                 _log.Information("--------------------");
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (Config.Config.ProcessConfigs.GenerateEMUConfig)
             {
@@ -53,6 +55,8 @@ public class Processor : IProcessor
                 await new EMUConfigGenerator().Generate(eMUConfigs).ConfigureAwait(false);
                 _log.Information("--------------------");
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (Config.Config.ProcessConfigs.Unpack)
             {
@@ -62,12 +66,16 @@ public class Processor : IProcessor
                 _log.Information("--------------------");
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (Config.Config.ProcessConfigs.ApplyEMU)
             {
                 _log.Information("----- 4. Apply Goldberg Steam Emulator -----");
                 await new EMUApply().Apply(emuApplyConfigs).ConfigureAwait(false);
                 _log.Information("--------------------");
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (Config.Config.ProcessConfigs.GenerateCrackOnly)
             {
@@ -76,6 +84,8 @@ public class Processor : IProcessor
                 _log.Information("--------------------");
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (Config.Config.ProcessConfigs.Restore)
             {
                 _log.Information("----- 6. Restore Crack -----");
@@ -83,8 +93,14 @@ public class Processor : IProcessor
                 _log.Information("--------------------");
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             _log.Information("All process completed.");
             GC.Collect();
+        }
+        catch (OperationCanceledException)
+        {
+            _log.Information("Operation was canceled.");
         }
         catch (Exception ex)
         {

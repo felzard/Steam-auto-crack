@@ -38,10 +38,16 @@ public partial class AppIDFinder : Window
                 await SteamAppList.WaitForReady().ConfigureAwait(false);
                 Dispatcher.Invoke(() =>
                 {
-                    Search.IsEnabled = true;
-                    AppName.IsEnabled = true;
-                    viewModel.SearchBtnString = Properties.Resources.Search;
-                    if (viewModel.AppName != string.Empty) Search_Click(new object(), new RoutedEventArgs());
+                    if (viewModel.AppName != string.Empty)
+                    {
+                        Search_Click(new object(), new RoutedEventArgs());
+                    }
+                    else
+                    {
+                        Search.IsEnabled = true;
+                        AppName.IsEnabled = true;
+                        viewModel.SearchBtnString = Properties.Resources.Search;
+                    }
                 });
             }
             catch (Exception ex)
@@ -72,13 +78,9 @@ public partial class AppIDFinder : Window
         {
             var app = (SteamApp)apps[0].Item;
             if (app.AppId.HasValue)
-            {
                 OKEvent?.Invoke(app.AppId.Value);
-            }
             else
-            {
                 OKEvent?.Invoke(0);
-            }
             Close();
         }
     }

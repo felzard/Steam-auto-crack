@@ -7,6 +7,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Navigation;
 using Antelcat.I18N.Attributes;
@@ -39,6 +40,7 @@ public partial class MainWindow
 
     private bool bSettingsOpened;
     private bool bStarted;
+    private CancellationTokenSource cts = new();
 
     public MainWindow()
     {
@@ -65,6 +67,7 @@ public partial class MainWindow
                 .CreateLogger();
         _log = Log.ForContext<MainWindow>();
         DataContext = viewModel;
+        viewModel.StartBtnString = Properties.Resources.Start;
         Loaded += MainWindow_Loaded;
         Task.Run(async () => { await SteamAppList.Initialize().ConfigureAwait(false); });
         Task.Run(() => { CheckGoldberg(); });
@@ -91,36 +94,60 @@ public partial class MainWindow
 
     #endregion
 
+    #region SteamStubUnpacker
+
+    private void SteamAPICheckBypassMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SteamAPICheckBypassNthTime == null)
+            return;
+        if (viewModel.SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.Disabled ||
+            viewModel.SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.All)
+            SteamAPICheckBypassNthTime.IsEnabled = false;
+        else
+            SteamAPICheckBypassNthTime.IsEnabled = true;
+    }
+
+    #endregion
+
     #region Basic
 
     private void Start_Click(object sender, RoutedEventArgs e)
     {
-        Settings.IsEnabled = false;
-        Start.IsEnabled = false;
-        AppIDFinder.IsEnabled = false;
-        GenerateEMUGameInfoGrid.IsEnabled = false;
-        GenerateEMUConfigGrid.IsEnabled = false;
-        UnpackGrid.IsEnabled = false;
-        ApplyEMUGrid.IsEnabled = false;
-        GenerateCrackOnlyGrid.IsEnabled = false;
-        GenerateEMUGameInfo.IsEnabled = false;
-        GenerateEMUConfig.IsEnabled = false;
-        Unpack.IsEnabled = false;
-        ApplyEMU.IsEnabled = false;
-        GenerateCrackOnly.IsEnabled = false;
-        Restore.IsEnabled = false;
-        InputPath.IsEnabled = false;
-        Select.IsEnabled = false;
-
-
         Task.Run(async () =>
         {
+            if (bStarted)
+            {
+                Dispatcher.Invoke(() => { Start.IsEnabled = false; });
+                cts.Cancel();
+                return;
+            }
+
+            Dispatcher.Invoke(() =>
+            {
+                Start.IsEnabled = false;
+                AppIDFinder.IsEnabled = false;
+                GenerateEMUGameInfoGrid.IsEnabled = false;
+                GenerateEMUConfigGrid.IsEnabled = false;
+                UnpackGrid.IsEnabled = false;
+                ApplyEMUGrid.IsEnabled = false;
+                GenerateCrackOnlyGrid.IsEnabled = false;
+                GenerateEMUGameInfo.IsEnabled = false;
+                GenerateEMUConfig.IsEnabled = false;
+                Unpack.IsEnabled = false;
+                ApplyEMU.IsEnabled = false;
+                GenerateCrackOnly.IsEnabled = false;
+                Restore.IsEnabled = false;
+                InputPath.IsEnabled = false;
+                Select.IsEnabled = false;
+            });
+
+            cts = new CancellationTokenSource();
+
             if (viewModel.GenerateEMUGameInfo && viewModel.AppID == string.Empty && viewModel.InputPath != string.Empty)
             {
                 _log.Information(Properties.Resources.EmptyAppIDPleaseSelectOneUsingAppIDFinder);
-                Dispatcher.Invoke(() =>
-                {
-                    if (!bAppIDFinderOpened)
+                if (!bAppIDFinderOpened)
+                    Dispatcher.Invoke(() =>
                     {
                         bAppIDFinderOpened = true;
                         Start.IsEnabled = false;
@@ -130,16 +157,24 @@ public partial class MainWindow
                         finder.ClosingEvent += AppIDFinderClosedStart;
                         finder.OKEvent += AppIDFinderOKStart;
                         finder.Show();
-                    }
-                });
+                    });
+
                 return;
             }
 
-            await new Processor().ProcessFileGUI().ConfigureAwait(false);
+            Dispatcher.Invoke(() =>
+            {
+                Start.IsEnabled = true;
+                viewModel.StartBtnString = Properties.Resources.Stop;
+            });
+
+            bStarted = true;
+            await new Processor().ProcessFileGUI(cts.Token).ConfigureAwait(false);
             Dispatcher.Invoke(() =>
             {
                 Settings.IsEnabled = true;
                 Start.IsEnabled = true;
+                viewModel.StartBtnString = Properties.Resources.Start;
                 AppIDFinder.IsEnabled = true;
                 GenerateEMUGameInfoGrid.IsEnabled = true;
                 GenerateEMUConfigGrid.IsEnabled = true;
@@ -158,6 +193,7 @@ public partial class MainWindow
                 Restore.IsEnabled = true;
                 InputPath.IsEnabled = true;
                 Select.IsEnabled = true;
+                bStarted = false;
             });
         });
     }
@@ -201,11 +237,18 @@ public partial class MainWindow
         {
             viewModel.AppID = appid.ToString();
             bAppIDFinderOpened = false;
-            await new Processor().ProcessFileGUI().ConfigureAwait(false);
+            Dispatcher.Invoke(() =>
+            {
+                Start.IsEnabled = true;
+                viewModel.StartBtnString = Properties.Resources.Stop;
+            });
+
+            await new Processor().ProcessFileGUI(cts.Token).ConfigureAwait(false);
             Dispatcher.Invoke(() =>
             {
                 Settings.IsEnabled = true;
                 Start.IsEnabled = true;
+                viewModel.StartBtnString = Properties.Resources.Start;
                 AppIDFinder.IsEnabled = true;
                 GenerateEMUGameInfoGrid.IsEnabled = true;
                 GenerateEMUConfigGrid.IsEnabled = true;
@@ -529,23 +572,6 @@ public partial class MainWindow
 
     #endregion
 
-    #region SteamStubUnpacker
-    private void SteamAPICheckBypassMode_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-    {
-        if (SteamAPICheckBypassNthTime == null)
-            return;
-        if (viewModel.SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.Disabled ||
-            viewModel.SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.All)
-        {
-                SteamAPICheckBypassNthTime.IsEnabled = false;
-        }
-        else
-        {
-                SteamAPICheckBypassNthTime.IsEnabled = true;
-        }
-    }
-    #endregion
-
     #region Restore
 
     private void Restore_Checked(object sender, RoutedEventArgs e)
@@ -576,5 +602,6 @@ public partial class MainWindow
         viewModel.Unpack = true;
         viewModel.ApplyEMU = true;
     }
+
     #endregion
 }

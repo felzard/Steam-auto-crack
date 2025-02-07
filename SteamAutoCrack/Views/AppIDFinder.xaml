@@ -26,8 +26,5 @@
 
         <Button x:Name="OK" Content="{I18N {x:Static steamAutoCrack:LangKeys.OK}}" HorizontalAlignment="Left" Margin="45,470,0,0" VerticalAlignment="Top" Width="90" Click="OK_Click" RenderTransformOrigin="1.383,0.585"/>
         <Button x:Name="Cancel" Content="{I18N {x:Static steamAutoCrack:LangKeys.Cancel}}" HorizontalAlignment="Left" Margin="422,470,0,0" VerticalAlignment="Top" Width="90" Click="Cancel_Click"/>
-
-
-
     </Grid>
 </Window>

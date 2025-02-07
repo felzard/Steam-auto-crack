@@ -53,46 +53,72 @@ public class SteamAppList
 
     public static SQLiteAsyncConnection db;
 
+    private static TaskCompletionSource<bool> _initializationTcs = new();
+
     public static async Task Initialize(bool forceupdate = false)
     {
         _log = Log.ForContext<SteamAppList>();
-        bDisposed = true;
-        if (bInited && !forceupdate)
-        {
-            _log.Debug("Already initialized Steam App list.");
-            return;
-        }
+        const int maxRetryAttempts = 5;
+        var retryAttempts = 0;
 
-        _log.Debug("Initializing Steam App list...");
-        bInited = false;
-        if (!Directory.Exists(Config.Config.TempPath)) Directory.CreateDirectory(Config.Config.TempPath);
-        db = new SQLiteAsyncConnection(Database);
-        await db.CreateTableAsync<SteamApp>().ConfigureAwait(false);
-        var countAsync = await db.Table<SteamApp>().CountAsync().ConfigureAwait(false);
-        if (DateTime.Now.Subtract(File.GetLastWriteTimeUtc(Database)).TotalDays >= 1 || countAsync == 0 || forceupdate)
-        {
-            _log.Information("Updating Steam Applist...");
-            var client = new HttpClient();
-            var appList = new HashSet<SteamApp>();
-            var response = await client.GetAsync(steamapplisturl).ConfigureAwait(false);
-            var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            var steamApps = DeserializeSteamApps(responseBody);
-            if (steamApps?.AppList?.Apps != null)
+        while (retryAttempts < maxRetryAttempts)
+            try
             {
-                foreach (var appListApp in steamApps.AppList.Apps) appList.Add(appListApp);
-            }
-            await db.InsertAllAsync(appList, "OR IGNORE").ConfigureAwait(false);
-            _log.Information("Updated Steam App list.");
-        }
-        else
-        {
-            _log.Information("Applist already updated to latest version.");
-        }
+                bDisposed = true;
+                _initializationTcs = new TaskCompletionSource<bool>();
+                if (bInited && !forceupdate)
+                {
+                    _log.Debug("Already initialized Steam App list.");
+                    return;
+                }
 
-        _log.Debug("App Count: {count}",
-            db.Table<SteamApp>().CountAsync().ConfigureAwait(false).GetAwaiter().GetResult());
-        _log.Information("Initialized Steam App list.");
-        bInited = true;
+                _log.Debug("Initializing Steam App list...");
+                bInited = false;
+                if (!Directory.Exists(Config.Config.TempPath)) Directory.CreateDirectory(Config.Config.TempPath);
+                db = new SQLiteAsyncConnection(Database);
+                await db.CreateTableAsync<SteamApp>().ConfigureAwait(false);
+                var countAsync = await db.Table<SteamApp>().CountAsync().ConfigureAwait(false);
+                if (DateTime.Now.Subtract(File.GetLastWriteTimeUtc(Database)).TotalDays >= 1 || countAsync == 0 ||
+                    forceupdate)
+                {
+                    _log.Information("Updating Steam Applist...");
+                    var client = new HttpClient();
+                    var appList = new HashSet<SteamApp>();
+                    var response = await client.GetAsync(steamapplisturl).ConfigureAwait(false);
+                    var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var steamApps = DeserializeSteamApps(responseBody);
+                    if (steamApps?.AppList?.Apps != null)
+                        foreach (var appListApp in steamApps.AppList.Apps)
+                            appList.Add(appListApp);
+
+                    await db.InsertAllAsync(appList, "OR IGNORE").ConfigureAwait(false);
+                    _log.Information("Updated Steam App list.");
+                }
+                else
+                {
+                    _log.Information("Applist already updated to latest version.");
+                }
+
+                _log.Debug("App Count: {count}",
+                    db.Table<SteamApp>().CountAsync().ConfigureAwait(false).GetAwaiter().GetResult());
+                _log.Information("Initialized Steam App list.");
+                bInited = true;
+                _initializationTcs.TrySetResult(true);
+                return;
+            }
+            catch (Exception ex)
+            {
+                retryAttempts++;
+                _log.Error(
+                    $"Failed to initialize Steam App list, attempt {retryAttempts} of {maxRetryAttempts}. Retrying...",
+                    ex);
+                if (retryAttempts >= maxRetryAttempts)
+                {
+                    _log.Error(
+                        "Max retry attempts reached. Initialization failed, please retry update Applist in settings.");
+                    throw;
+                }
+            }
     }
 
     public static async Task WaitForReady()
@@ -104,10 +130,7 @@ public class SteamAppList
         }
 
         _log.Debug("Waiting for Steam App list initialized...");
-        while (!bInited)
-        {
-            await Task.Delay(100);
-        }
+        await _initializationTcs.Task.ConfigureAwait(false);
     }
 
     private static SteamAppsV2? DeserializeSteamApps(string json)
@@ -127,10 +150,7 @@ public class SteamAppList
         {
             var app = await GetAppById(appid).ConfigureAwait(false);
             var appToRemove = listOfAppsByName.Find(d => d.AppId == appid);
-            if (appToRemove != null)
-            {
-                listOfAppsByName.Remove(appToRemove);
-            }
+            if (appToRemove != null) listOfAppsByName.Remove(appToRemove);
             if (app != null) listOfAppsByName.Insert(0, app);
         }
 
@@ -149,10 +169,7 @@ public class SteamAppList
         {
             var app = await GetAppById(appid).ConfigureAwait(false);
             var appToRemove = listOfAppsByName.Find(d => d.AppId == appid);
-            if (appToRemove != null)
-            {
-                listOfAppsByName.Remove(appToRemove);
-            }
+            if (appToRemove != null) listOfAppsByName.Remove(appToRemove);
             if (app != null) listOfAppsByName.Insert(0, app);
         }
 

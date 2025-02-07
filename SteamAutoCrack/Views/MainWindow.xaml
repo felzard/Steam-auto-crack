@@ -30,7 +30,7 @@
         <Button x:Name="Clear_Log" Grid.Column="1" Content="{I18N {x:Static steamAutoCrack:LangKeys.ClearLog}}" HorizontalAlignment="Left" Margin="380,15,0,0" VerticalAlignment="Top" Height="20" RenderTransformOrigin="0.82,-0.368" Width="95" Click="Clear_Log_Click"/>
         <Button x:Name="Settings" Content="{I18N {x:Static steamAutoCrack:LangKeys.Settings}}" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" Height="24" Width="65" Click="Settings_Click"/>
         <Button x:Name="About" Content="{I18N {x:Static steamAutoCrack:LangKeys.About}}" HorizontalAlignment="Left" Margin="425,10,0,0" VerticalAlignment="Top" Height="24" Width="65" Click="About_Click"/>
-        <Button x:Name="Start" Content="{I18N {x:Static steamAutoCrack:LangKeys.Start}}" HorizontalAlignment="Center" Margin="0,630,150,0" VerticalAlignment="Top" Height="24" Width="85" Click="Start_Click" IsDefault="True"/>
+        <Button x:Name="Start" Content="{Binding StartBtnString}" HorizontalAlignment="Center" Margin="0,630,150,0" VerticalAlignment="Top" Height="24" Width="85" Click="Start_Click" IsDefault="True"/>
         <Button x:Name="Exit" Content="{I18N {x:Static steamAutoCrack:LangKeys.Exit}}" HorizontalAlignment="Center" Margin="150,630,0,0" VerticalAlignment="Top" Height="24" Width="85" Click="Exit_Click"/>
         <ListView x:Name="LogBox" Grid.Column="1" Margin="10,40,15,10" Foreground="Black">
             <ListView.View>

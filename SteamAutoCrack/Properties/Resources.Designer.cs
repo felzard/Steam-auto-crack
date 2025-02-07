@@ -700,6 +700,15 @@ namespace SteamAutoCrack.Properties {
         }
         
         /// <summary>
+        ///   查找类似 Stop 的本地化字符串。
+        /// </summary>
+        public static string Stop {
+            get {
+                return ResourceManager.GetString("Stop", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   查找类似 Update/Download 的本地化字符串。
         /// </summary>
         public static string UpdateDownload {

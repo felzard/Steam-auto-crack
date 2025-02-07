@@ -351,4 +351,7 @@
   <data name="NthTime" xml:space="preserve">
     <value>第N次:</value>
   </data>
+  <data name="Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
 </root>

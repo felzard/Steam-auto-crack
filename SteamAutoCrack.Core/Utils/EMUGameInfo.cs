@@ -10,7 +10,6 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using IniFile;
 using Serilog;
-using SteamAutoCrack.Core.Config;
 using SteamKit2;
 using ValveKeyValue;
 using static SteamAutoCrack.Core.Utils.EMUGameInfoConfig;
@@ -100,7 +99,7 @@ public class EMUGameInfoConfigDefault
 
 public interface IEMUGameInfo
 {
-    public Task<bool> Generate(EMUGameInfoConfig GameInfoConfig);
+    public Task<bool> Generate(EMUGameInfoConfig GameInfoConfig, CancellationToken cancellationToken = default);
 }
 
 public class EMUGameInfo : IEMUGameInfo
@@ -112,7 +111,7 @@ public class EMUGameInfo : IEMUGameInfo
         _log = Log.ForContext<EMUGameInfo>();
     }
 
-    public async Task<bool> Generate(EMUGameInfoConfig GameInfoConfig)
+    public async Task<bool> Generate(EMUGameInfoConfig GameInfoConfig, CancellationToken cancellationToken = default)
     {
         Generator Generator;
         _log.Information("Generating game info...");
@@ -134,7 +133,7 @@ public class EMUGameInfo : IEMUGameInfo
 
         try
         {
-            await Generator.InfoGenerator().ConfigureAwait(false);
+            await Generator.InfoGenerator(cancellationToken).ConfigureAwait(false);
             _log.Information("Generated game info.");
             return true;
         }
@@ -176,7 +175,7 @@ internal abstract class Generator
         UseSteamWebAppList = GameInfoConfig.UseSteamWebAppList;
     }
 
-    public abstract Task InfoGenerator();
+    public abstract Task InfoGenerator(CancellationToken cancellationToken = default);
 
     protected Task GenerateBasic()
     {
@@ -222,7 +221,7 @@ internal abstract class Generator
         });
     }
 
-    protected async Task<bool> GetGameSchema()
+    protected async Task<bool> GetGameSchema(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -261,8 +260,8 @@ internal abstract class Generator
 
             client.Timeout = TimeSpan.FromSeconds(30);
             var response = await LimitSteamWebApiGET(client,
-                new HttpRequestMessage(HttpMethod.Get, apiUrl));
-            var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                new HttpRequestMessage(HttpMethod.Get, apiUrl), cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var responseCode = response.StatusCode;
             if (responseCode == HttpStatusCode.OK)
             {
@@ -282,6 +281,11 @@ internal abstract class Generator
 
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+            return false;
+        }
         catch (Exception ex)
         {
             _log.Error(ex, "Failed to get game schema.");
@@ -289,9 +293,10 @@ internal abstract class Generator
         }
     }
 
-    protected async Task DownloadImageAsync(string imageFolder, Achievement achievement)
+    protected async Task DownloadImageAsync(string imageFolder, Achievement achievement,
+        CancellationToken cancellationToken = default)
     {
-        var wc = new WebClient();
+        using var client = new HttpClient();
         try
         {
             var fileName = Path.GetFileName(achievement.Icon);
@@ -299,12 +304,19 @@ internal abstract class Generator
             if (!DownloadedFile.Exists(x => x == targetPath))
             {
                 DownloadedFile.Add(targetPath);
-                await wc.DownloadFileTaskAsync(new Uri(achievement.Icon, UriKind.Absolute), targetPath);
+                var response = await client.GetAsync(new Uri(achievement.Icon, UriKind.Absolute), cancellationToken);
+                response.EnsureSuccessStatusCode();
+                await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                await response.Content.CopyToAsync(fs, cancellationToken);
             }
             else
             {
                 _log.Debug("Image {targetPath} already downloaded. Skipping...", targetPath);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            _log.Information("Operation was canceled.");
         }
         catch (Exception ex)
         {
@@ -318,12 +330,19 @@ internal abstract class Generator
             if (!DownloadedFile.Exists(x => x == targetPathGray))
             {
                 DownloadedFile.Add(targetPathGray);
-                await wc.DownloadFileTaskAsync(new Uri(achievement.IconGray, UriKind.Absolute), targetPathGray);
+                var response =
+                    await client.GetAsync(new Uri(achievement.IconGray, UriKind.Absolute), cancellationToken);
+                response.EnsureSuccessStatusCode();
+                await using var fs = new FileStream(targetPathGray, FileMode.Create, FileAccess.Write, FileShare.None);
+                await response.Content.CopyToAsync(fs, cancellationToken);
             }
             else
             {
                 _log.Debug("Gray image {targetPath} already downloaded. Skipping...", targetPathGray);
             }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception ex)
         {
@@ -331,7 +350,7 @@ internal abstract class Generator
         }
     }
 
-    protected async Task GenerateAchievements()
+    protected async Task GenerateAchievements(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -365,13 +384,14 @@ internal abstract class Generator
 
                 IEnumerable<Task> downloadTasksQuery =
                     from achievement in achievementList
-                    select DownloadImageAsync(imagePath, achievement);
+                    select DownloadImageAsync(imagePath, achievement, cancellationToken);
 
                 var downloadTasks = downloadTasksQuery.ToList();
                 while (downloadTasks.Any())
                 {
                     var finishedTask = await Task.WhenAny(downloadTasks);
                     downloadTasks.Remove(finishedTask);
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
 
                 _log.Debug("Downloaded achievement images.");
@@ -392,12 +412,17 @@ internal abstract class Generator
                     Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
                     WriteIndented = true
                 });
-            await File.WriteAllTextAsync(Path.Combine(ConfigPath, "achievements.json"), achievementJson)
+            await File.WriteAllTextAsync(Path.Combine(ConfigPath, "achievements.json"), achievementJson,
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
         {
             _log.Information("No achievements, skipping...");
+        }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
         }
         catch (Exception ex)
         {
@@ -407,7 +432,7 @@ internal abstract class Generator
         _log.Debug("Generated achievements.");
     }
 
-    protected async Task GenerateStats()
+    protected async Task GenerateStats(CancellationToken cancellationToken = default)
     {
         await Task.Run(() =>
         {
@@ -430,6 +455,8 @@ internal abstract class Generator
                 var newline = "";
                 foreach (var stat in statData.EnumerateArray())
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     var name = "";
                     var defaultValue = "";
 
@@ -454,6 +481,10 @@ internal abstract class Generator
                     return;
                 }
             }
+            catch (OperationCanceledException)
+            {
+                _log.Debug("Operation was canceled.");
+            }
             catch (KeyNotFoundException)
             {
                 _log.Information("No stats, skipping...");
@@ -464,11 +495,11 @@ internal abstract class Generator
             }
 
             _log.Debug("Generated stats.");
-        });
+        }, cancellationToken);
     }
 
     protected async Task<HttpResponseMessage> LimitSteamWebApiGET(HttpClient http_client,
-        HttpRequestMessage http_request, CancellationTokenSource? cts = null)
+        HttpRequestMessage http_request, CancellationToken cancellationToken = default)
     {
         // Steam has a limit of 300 requests every 5 minutes (1 request per second).
         if (DateTime.Now - LastWebRequestTime < TimeSpan.FromSeconds(1))
@@ -476,9 +507,7 @@ internal abstract class Generator
 
         LastWebRequestTime = DateTime.Now;
 
-        if (cts == null) cts = new CancellationTokenSource();
-
-        return await http_client.SendAsync(http_request, HttpCompletionOption.ResponseContentRead, cts.Token)
+        return await http_client.SendAsync(http_request, HttpCompletionOption.ResponseContentRead, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -550,29 +579,33 @@ internal class GeneratorSteamClient : Generator
     {
     }
 
-    private async Task<byte[]> DownloadPubfileAsync(ulong publishedFileId)
+    private async Task<byte[]> DownloadPubfileAsync(ulong publishedFileId,
+        CancellationToken cancellationToken = default)
     {
         var details = await steam3.GetPublishedFileDetails(publishedFileId);
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!string.IsNullOrEmpty(details?.file_url))
-            return await DownloadWebFile(details.filename, details.file_url);
+            return await DownloadWebFile(details.filename, details.file_url, cancellationToken);
 
         _log.Warning("Publish File {id} doesn't contain file_url.", publishedFileId);
         throw new Exception("Unable to download publish file.");
     }
 
-    private async Task<byte[]> DownloadWebFile(string fileName, string url)
+    private async Task<byte[]> DownloadWebFile(string fileName, string url,
+        CancellationToken cancellationToken = default)
     {
         using (var client = HttpClientFactory.CreateHttpClient())
         {
             _log.Debug("Downloading {0}", fileName);
-            using var response = await client.GetAsync(url).ConfigureAwait(false);
+            using var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private async Task Steam3Start()
+    private async Task Steam3Start(CancellationToken cancellationToken = default)
     {
         await Task.Run(() =>
         {
@@ -586,7 +619,12 @@ internal class GeneratorSteamClient : Generator
                         Username = null,
                         Password = null
                     }
+                    , cancellationToken
                 );
+            }
+            catch (OperationCanceledException)
+            {
+                _log.Debug("Operation was canceled.");
             }
             catch (Exception ex)
             {
@@ -628,7 +666,7 @@ internal class GeneratorSteamClient : Generator
         });
     }
 
-    private async Task GenerateControllerInfo()
+    private async Task GenerateControllerInfo(CancellationToken cancellationToken = default)
     {
         var controllerFolder = Path.Combine(ConfigPath, "controller");
         string[] supported_controllers_types =
@@ -1389,6 +1427,8 @@ internal class GeneratorSteamClient : Generator
                      && c["enabled_branches"].Value.Split(",")
                          .Any(br => br.Equals("default", StringComparison.OrdinalIgnoreCase)));
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             KeyValue? con = null;
             foreach (var item in supported_controllers_types)
             {
@@ -1402,6 +1442,8 @@ internal class GeneratorSteamClient : Generator
                 if (con != null) break;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (con == null)
             {
                 _log.Warning("Failed to get supported controller info, skipping...(AppID: {appid})", AppID);
@@ -1410,7 +1452,7 @@ internal class GeneratorSteamClient : Generator
 
             _log.Debug("Downloading controller vdf file {id} (Type: {type})...", con.Name,
                 con["controller_type"].Value);
-            var controller_vdf = await DownloadPubfileAsync(Convert.ToUInt64(con.Name));
+            var controller_vdf = await DownloadPubfileAsync(Convert.ToUInt64(con.Name), cancellationToken);
             using (var vdfStream = new MemoryStream(controller_vdf, false))
             {
                 var controller_vdf_json = LoadTextVdf(vdfStream);
@@ -1419,13 +1461,17 @@ internal class GeneratorSteamClient : Generator
 
             _log.Debug("Generated Controller Info.");
         }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+        }
         catch (Exception ex)
         {
             _log.Warning(ex, "Failed to generate controller info.");
         }
     }
 
-    private async Task GenerateSupportedLang()
+    private async Task GenerateSupportedLang(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1444,6 +1490,7 @@ internal class GeneratorSteamClient : Generator
                 var newline = "";
                 GameInfoCommon["supported_languages"].Children.ForEach(delegate(KeyValue language)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (language.Children.Exists(x => x.Name == "supported" && x.Value == "true"))
                     {
                         sw.Write(newline + language.Name);
@@ -1453,6 +1500,10 @@ internal class GeneratorSteamClient : Generator
                 sw.Close();
             }
         }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+        }
         catch (Exception ex)
         {
             _log.Information(ex, "Failed to generate supported_languages.txt. Skipping...");
@@ -1461,7 +1512,7 @@ internal class GeneratorSteamClient : Generator
         _log.Debug("Generated supported_languages.txt.");
     }
 
-    private async Task GenerateDepots()
+    private async Task GenerateDepots(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1496,6 +1547,8 @@ internal class GeneratorSteamClient : Generator
 
                     foreach (var branch in GameInfoDepots["branches"].Children)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
+
                         var branchObject = new JsonObject();
 
                         var description = "";
@@ -1526,6 +1579,10 @@ internal class GeneratorSteamClient : Generator
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+        }
         catch (Exception ex)
         {
             _log.Information(ex, "Failed to generate depot infos. Skipping...");
@@ -1534,7 +1591,7 @@ internal class GeneratorSteamClient : Generator
         _log.Debug("Generated depot infos.");
     }
 
-    private async Task GenerateDLCs()
+    private async Task GenerateDLCs(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1545,6 +1602,8 @@ internal class GeneratorSteamClient : Generator
                 _log.Error("Failed to get game info, skipping generate DLCs...(AppID: {appid})", AppID);
                 return;
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             var DLCIds = new List<uint>();
             if (GameInfoDLCs["listofdlc"] != KeyValue.Invalid)
@@ -1563,6 +1622,8 @@ internal class GeneratorSteamClient : Generator
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             var GameInfoDepots = await GetSteam3AppSection(AppID, EAppInfoSection.Depots).ConfigureAwait(false);
 
             GameInfoDepots.Children.ForEach(delegate(KeyValue DepotIDs)
@@ -1579,14 +1640,18 @@ internal class GeneratorSteamClient : Generator
                 return;
             }
 
-            ;
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (UseSteamWebAppList)
             {
                 await SteamAppList.WaitForReady().ConfigureAwait(false);
                 _log.Debug("Using Steam Web App list.");
                 var DLCInfos = new List<SteamApp>();
-                foreach (var DLCId in DLCIds) DLCInfos.Add(await SteamAppList.GetAppById(DLCId).ConfigureAwait(false));
+                foreach (var DLCId in DLCIds)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    DLCInfos.Add(await SteamAppList.GetAppById(DLCId).ConfigureAwait(false));
+                }
 
                 var dlcsection = new Section("app::dlcs")
                 {
@@ -1627,6 +1692,7 @@ internal class GeneratorSteamClient : Generator
                 {
                     var finishedTask = await Task.WhenAny(getInfoTasks);
                     getInfoTasks.Remove(finishedTask);
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
 
                 foreach (var DLCId in DLCIds)
@@ -1660,6 +1726,10 @@ internal class GeneratorSteamClient : Generator
                 config_app.Add(dlcsection);
             }
         }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+        }
         catch (Exception ex)
         {
             _log.Information(ex, "Failed to generate DLCs. Skipping...");
@@ -1668,7 +1738,7 @@ internal class GeneratorSteamClient : Generator
         _log.Debug("Generated DLCs.");
     }
 
-    private async Task GenerateInventory()
+    private async Task GenerateInventory(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1696,8 +1766,8 @@ internal class GeneratorSteamClient : Generator
 
                 client.Timeout = TimeSpan.FromSeconds(30);
                 var response = await LimitSteamWebApiGET(client,
-                    new HttpRequestMessage(HttpMethod.Get, apiUrl));
-                var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    new HttpRequestMessage(HttpMethod.Get, apiUrl), cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 var responseCode = response.StatusCode;
                 if (responseCode == HttpStatusCode.OK)
                 {
@@ -1719,7 +1789,8 @@ internal class GeneratorSteamClient : Generator
                 if (response.Content != null)
                 {
                     var responsejson =
-                        JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+                        JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken)
+                            .ConfigureAwait(false));
                     if (responsejson.RootElement.TryGetProperty("response", out var responsedata))
                         digest = responsedata.GetProperty("digest").ToString();
                 }
@@ -1738,14 +1809,15 @@ internal class GeneratorSteamClient : Generator
                 client.Timeout = TimeSpan.FromSeconds(30);
                 var response = await LimitSteamWebApiGET(client,
                         new HttpRequestMessage(HttpMethod.Get,
-                            $"https://api.steampowered.com/IGameInventory/GetItemDefArchive/v0001?appid={AppID}&digest={digest.Trim(new[] { '"' })}"))
+                            $"https://api.steampowered.com/IGameInventory/GetItemDefArchive/v0001?appid={AppID}&digest={digest.Trim(new[] { '"' })}"),
+                        cancellationToken)
                     .ConfigureAwait(false);
 
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     if (response.Content != null)
                     {
-                        var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                         var items = JsonNode.Parse(content.Trim(new[] { '\0' }))?.Root.AsArray();
                         if (items?.Count > 0)
                         {
@@ -1790,6 +1862,10 @@ internal class GeneratorSteamClient : Generator
         {
             _log.Information("No inventory, skipping...");
         }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+        }
         catch (Exception ex)
         {
             _log.Error(ex, "Failed to generate inventory info. Skipping...");
@@ -1801,53 +1877,69 @@ internal class GeneratorSteamClient : Generator
         await steam3.RequestAppInfo(appID, true).ConfigureAwait(false);
     }
 
-    private async Task<bool> WaitForConnected()
+    private async Task<bool> WaitForConnected(CancellationToken cancellationToken = default)
     {
         if (steam3.IsLoggedOn || steam3.bAborted)
             return steam3.IsLoggedOn;
 
-        steam3.WaitUntilCallback(() => { }, () => steam3.IsLoggedOn);
+        steam3.WaitUntilCallback(() => { }, () => steam3.IsLoggedOn, cancellationToken);
 
         return steam3.IsLoggedOn;
     }
 
-    public override async Task InfoGenerator()
+    public override async Task InfoGenerator(CancellationToken cancellationToken = default)
     {
         try
         {
             await GenerateBasic().ConfigureAwait(false);
-            await Steam3Start().ConfigureAwait(false);
+            await Steam3Start(cancellationToken).ConfigureAwait(false);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
             var TaskA = Task.Run(async () =>
             {
-                if (GetGameSchema().GetAwaiter().GetResult())
+                if (GetGameSchema(cancellationToken).GetAwaiter().GetResult())
                 {
-                    var Tasks2 = new List<Task> { GenerateAchievements(), GenerateStats() };
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var Tasks2 = new List<Task>
+                        { GenerateAchievements(cancellationToken), GenerateStats(cancellationToken) };
                     while (Tasks2.Count > 0)
                     {
                         var finishedTask2 = await Task.WhenAny(Tasks2);
                         Tasks2.Remove(finishedTask2);
+
+                        cancellationToken.ThrowIfCancellationRequested();
                     }
                 }
             });
 
-            if (await WaitForConnected().ConfigureAwait(false))
+            if (await WaitForConnected(cancellationToken).ConfigureAwait(false))
             {
                 await GetAppInfo(AppID).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
                 var Tasks1 = new List<Task>
                 {
-                    GenerateSupportedLang(), GenerateDepots(), GenerateDLCs(), GenerateInventory(),
+                    GenerateSupportedLang(cancellationToken), GenerateDepots(cancellationToken),
+                    GenerateDLCs(cancellationToken), GenerateInventory(cancellationToken),
                     GenerateControllerInfo()
                 };
                 while (Tasks1.Count > 0)
                 {
                     var finishedTask1 = await Task.WhenAny(Tasks1);
                     Tasks1.Remove(finishedTask1);
+
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
             }
 
             Task.WaitAll(TaskA);
+            cancellationToken.ThrowIfCancellationRequested();
             WriteIni();
             steam3?.Disconnect();
+        }
+        catch (OperationCanceledException)
+        {
+            _log.Information("Operation was canceled.");
         }
         catch (Exception e)
         {
@@ -1863,7 +1955,7 @@ internal class GeneratorSteamWeb : Generator
     {
     }
 
-    private async Task GenerateDLCs()
+    private async Task GenerateDLCs(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1874,12 +1966,17 @@ internal class GeneratorSteamWeb : Generator
             client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
             client.Timeout = TimeSpan.FromSeconds(30);
             var response = await LimitSteamWebApiGET(client,
-                new HttpRequestMessage(HttpMethod.Get,
-                    $"https://store.steampowered.com/api/appdetails/?appids={AppID}&l=english")).ConfigureAwait(false);
+                    new HttpRequestMessage(HttpMethod.Get,
+                        $"https://store.steampowered.com/api/appdetails/?appids={AppID}&l=english"), cancellationToken)
+                .ConfigureAwait(false);
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (response.StatusCode == HttpStatusCode.OK && response.Content != null)
             {
-                var responsejson = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+                var responsejson =
+                    JsonDocument.Parse(
+                        await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
                 if (responsejson.RootElement.GetProperty(AppID.ToString()).GetProperty("success").GetBoolean())
                     if (responsejson.RootElement.GetProperty(AppID.ToString()).GetProperty("data")
                         .TryGetProperty("dlc", out var dlcid))
@@ -1887,17 +1984,21 @@ internal class GeneratorSteamWeb : Generator
                             DLCIds.Add(dlc.GetUInt32());
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (DLCIds.Count == 0)
             {
                 _log.Debug("No DLCs. Skipping...");
                 return;
             }
 
-            ;
-
             await SteamAppList.WaitForReady().ConfigureAwait(false);
             var DLCInfos = new List<SteamApp>();
-            foreach (var DLCId in DLCIds) DLCInfos.Add(await SteamAppList.GetAppById(DLCId).ConfigureAwait(false));
+            foreach (var DLCId in DLCIds)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                DLCInfos.Add(await SteamAppList.GetAppById(DLCId).ConfigureAwait(false));
+            }
 
             var dlcsection = new Section("app::dlcs")
             {
@@ -1923,6 +2024,10 @@ internal class GeneratorSteamWeb : Generator
             dlcsection.Items.Add(new BlankLine());
             config_app.Add(dlcsection);
         }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+        }
         catch (Exception ex)
         {
             _log.Information(ex, "Failed to generate DLCs. Skipping...");
@@ -1931,11 +2036,16 @@ internal class GeneratorSteamWeb : Generator
         _log.Debug("Generated DLCs.");
     }
 
-    private async Task GenerateInventory()
+    private async Task GenerateInventory(CancellationToken cancellationToken = default)
     {
         try
         {
-            if (UseXan105API) _log.Debug("Using xan105 API, skipping generate inventory...");
+            if (UseXan105API)
+            {
+                _log.Debug("Using xan105 API, skipping generate inventory...");
+                return;
+            }
+
             _log.Debug("Generating inventory info...");
             var digest = string.Empty;
             using (var client = new HttpClient())
@@ -1948,8 +2058,8 @@ internal class GeneratorSteamWeb : Generator
 
                 client.Timeout = TimeSpan.FromSeconds(30);
                 var response = await LimitSteamWebApiGET(client,
-                    new HttpRequestMessage(HttpMethod.Get, apiUrl));
-                var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    new HttpRequestMessage(HttpMethod.Get, apiUrl), cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 var responseCode = response.StatusCode;
                 if (responseCode == HttpStatusCode.OK)
                 {
@@ -1971,7 +2081,8 @@ internal class GeneratorSteamWeb : Generator
                 if (response.Content != null)
                 {
                     var responsejson =
-                        JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+                        JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken)
+                            .ConfigureAwait(false));
                     if (responsejson.RootElement.TryGetProperty("response", out var responsedata))
                         digest = responsedata.GetProperty("digest").ToString();
                 }
@@ -1990,14 +2101,15 @@ internal class GeneratorSteamWeb : Generator
                 client.Timeout = TimeSpan.FromSeconds(30);
                 var response = await LimitSteamWebApiGET(client,
                         new HttpRequestMessage(HttpMethod.Get,
-                            $"https://api.steampowered.com/IGameInventory/GetItemDefArchive/v0001?appid={AppID}&digest={digest.Trim(new[] { '"' })}"))
+                            $"https://api.steampowered.com/IGameInventory/GetItemDefArchive/v0001?appid={AppID}&digest={digest.Trim(new[] { '"' })}"),
+                        cancellationToken)
                     .ConfigureAwait(false);
 
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     if (response.Content != null)
                     {
-                        var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                         var items = JsonNode.Parse(content.Trim(new[] { '\0' }))?.Root.AsArray();
                         if (items?.Count > 0)
                         {
@@ -2038,6 +2150,10 @@ internal class GeneratorSteamWeb : Generator
 
             _log.Debug("Generated inventory info.");
         }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+        }
         catch (KeyNotFoundException)
         {
             _log.Information("No inventory, skipping...");
@@ -2048,7 +2164,7 @@ internal class GeneratorSteamWeb : Generator
         }
     }
 
-    public override async Task InfoGenerator()
+    public override async Task InfoGenerator(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -2056,15 +2172,25 @@ internal class GeneratorSteamWeb : Generator
             if (GetGameSchema().GetAwaiter().GetResult())
             {
                 var Tasks2 = new List<Task>
-                    { GenerateAchievements(), GenerateStats(), GenerateDLCs(), GenerateInventory() };
+                {
+                    GenerateAchievements(cancellationToken), GenerateStats(cancellationToken),
+                    GenerateDLCs(cancellationToken), GenerateInventory(cancellationToken)
+                };
                 while (Tasks2.Count > 0)
                 {
                     var finishedTask2 = await Task.WhenAny(Tasks2);
                     Tasks2.Remove(finishedTask2);
+
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             WriteIni();
+        }
+        catch (OperationCanceledException)
+        {
+            _log.Information("Operation was canceled.");
         }
         catch (Exception e)
         {
@@ -2079,7 +2205,7 @@ internal class GeneratorOffline : Generator
     {
     }
 
-    public override async Task InfoGenerator()
+    public override async Task InfoGenerator(CancellationToken cancellationToken = default)
     {
         _log.Debug("Generator Offline, skip generating other files...");
         await GenerateBasic().ConfigureAwait(false);
