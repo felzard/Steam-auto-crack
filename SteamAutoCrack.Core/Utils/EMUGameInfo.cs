@@ -316,7 +316,7 @@ internal abstract class Generator
         }
         catch (OperationCanceledException)
         {
-            _log.Information("Operation was canceled.");
+            _log.Debug("Operation was canceled.");
         }
         catch (Exception ex)
         {
