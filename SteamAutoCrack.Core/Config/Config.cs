@@ -91,11 +91,30 @@ public class Config
     }
 
     /// <summary>
+    ///    Program language.
+    /// </summary>
+    public static Languages Language
+    {
+        get => _language;
+        set
+        {
+            if (_language != value)
+            {
+                _language = value;
+                OnLanguageChanged?.Invoke(_language);
+            }
+        }
+    }
+
+    /// <summary>
     ///     Output log to file.
     /// </summary>
     public static bool LogToFile { get; set; }
 
-    public static Languages Language { get; set; } = GetDefaultLanguage();
+    public delegate void LanguageChangedHandler(Languages newLanguage);
+    public static event LanguageChangedHandler? OnLanguageChanged;
+
+    public static Languages _language { get; set; } = GetDefaultLanguage();
 
     public static EMUApplyConfigs EMUApplyConfigs { get; set; } = new();
     public static EMUConfigs EMUConfigs { get; set; } = new();
@@ -230,7 +249,7 @@ public class Config
 
     public static string GetLanguage()
     {
-        switch (Language)
+        switch (_language)
         {
             case Languages.en_US:
                 return "en-US";

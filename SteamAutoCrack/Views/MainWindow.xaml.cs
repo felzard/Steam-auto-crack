@@ -68,6 +68,11 @@ public partial class MainWindow
         _log = Log.ForContext<MainWindow>();
         DataContext = viewModel;
         viewModel.StartBtnString = Properties.Resources.Start;
+        Config.OnLanguageChanged += newLanguage =>
+        {
+            I18NExtension.Culture = new CultureInfo(Config.GetLanguage());
+            viewModel.StartBtnString = Properties.Resources.Start;
+        };
         Loaded += MainWindow_Loaded;
         Task.Run(async () => { await SteamAppList.Initialize().ConfigureAwait(false); });
         Task.Run(() => { CheckGoldberg(); });
