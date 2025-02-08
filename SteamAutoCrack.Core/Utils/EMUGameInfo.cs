@@ -293,6 +293,140 @@ internal abstract class Generator
         }
     }
 
+    protected async Task GenerateInventory(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (UseXan105API)
+            {
+                _log.Debug("Using xan105 API, skipping generate inventory...");
+                return;
+            }
+
+            if (SteamWebAPIKey == string.Empty || SteamWebAPIKey == null)
+            {
+                _log.Warning("Empty Steam Web API Key, skipping generate inventory...");
+                return;
+            }
+
+            _log.Debug("Generating inventory info...");
+            var digest = string.Empty;
+            using (var client = new HttpClient())
+            {
+                _log.Debug("Getting inventory digest...");
+                JsonDocument digestJson;
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+                var apiUrl =
+                    $"https://api.steampowered.com/IInventoryService/GetItemDefMeta/v1?key={SteamWebAPIKey}&appid={AppID}";
+
+                client.Timeout = TimeSpan.FromSeconds(30);
+                var response = await LimitSteamWebApiGET(client,
+                    new HttpRequestMessage(HttpMethod.Get, apiUrl), cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                var responseCode = response.StatusCode;
+                if (responseCode == HttpStatusCode.OK)
+                {
+                    _log.Debug("Got inventory digest.");
+                    digestJson = JsonDocument.Parse(responseBody);
+                }
+                else if (responseCode == HttpStatusCode.Forbidden && !UseXan105API)
+                {
+                    _log.Error(
+                        "Error 403 in getting game inventory digest, please check your Steam Web API key. Skipping...");
+                    throw new Exception("Error 403 in getting game inventory digest.");
+                }
+                else
+                {
+                    _log.Error("Error {Code} in getting game inventory digest. Skipping...", responseCode);
+                    throw new Exception($"Error {responseCode} in getting game inventory digest. Skipping...");
+                }
+
+                if (response.Content != null)
+                {
+                    var responsejson =
+                        JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken)
+                            .ConfigureAwait(false));
+                    if (responsejson.RootElement.TryGetProperty("response", out var responsedata))
+                        digest = responsedata.GetProperty("digest").ToString();
+                }
+
+                if (digest == null)
+                {
+                    _log.Debug("No inventory digest, skipping...");
+                    return;
+                }
+            }
+
+            using (var client = new HttpClient())
+            {
+                _log.Debug("Getting inventory items...");
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+                client.Timeout = TimeSpan.FromSeconds(30);
+                var response = await LimitSteamWebApiGET(client,
+                        new HttpRequestMessage(HttpMethod.Get,
+                            $"https://api.steampowered.com/IGameInventory/GetItemDefArchive/v0001?appid={AppID}&digest={digest.Trim(new[] { '"' })}"),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    if (response.Content != null)
+                    {
+                        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                        var items = JsonNode.Parse(content.Trim(new[] { '\0' }))?.Root.AsArray();
+                        if (items?.Count > 0)
+                        {
+                            _log.Debug("Found items, generating...");
+                            var inventory = new JsonObject();
+                            var inventorydefault = new JsonObject();
+                            foreach (var item in items)
+                            {
+                                var x = new JsonObject();
+                                var index = item?["itemdefid"]?.ToString();
+
+                                if (item != null)
+                                    foreach (var t in item.AsObject())
+                                        if (t.Key != null && t.Value != null)
+                                            x.Add(t.Key, t.Value.ToString());
+
+                                inventory.Add(index, x);
+                                inventorydefault.Add(index, 1);
+                            }
+
+                            File.WriteAllText(Path.Combine(ConfigPath, "items.json"), inventory.ToString());
+                            File.WriteAllText(Path.Combine(ConfigPath, "default_items.json"),
+                                inventorydefault.ToString());
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        _log.Information("No inventory items. Skipping...");
+                        return;
+                    }
+                }
+                else
+                {
+                    throw new Exception($"Error {response.StatusCode} in getting game inventory.");
+                }
+            }
+
+            _log.Debug("Generated inventory info.");
+        }
+        catch (KeyNotFoundException)
+        {
+            _log.Information("No inventory, skipping...");
+        }
+        catch (OperationCanceledException)
+        {
+            _log.Debug("Operation was canceled.");
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "Failed to generate inventory info. Skipping...");
+        }
+    }
+
     protected async Task DownloadImageAsync(string imageFolder, Achievement achievement,
         CancellationToken cancellationToken = default)
     {
@@ -1738,140 +1872,6 @@ internal class GeneratorSteamClient : Generator
         _log.Debug("Generated DLCs.");
     }
 
-    private async Task GenerateInventory(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (UseXan105API)
-            {
-                _log.Debug("Using xan105 API, skipping generate inventory...");
-                return;
-            }
-
-            if (SteamWebAPIKey == string.Empty || SteamWebAPIKey == null)
-            {
-                _log.Warning("Empty Steam Web API Key, skipping generate inventory...");
-                return;
-            }
-
-            _log.Debug("Generating inventory info...");
-            var digest = string.Empty;
-            using (var client = new HttpClient())
-            {
-                _log.Debug("Getting inventory digest...");
-                JsonDocument digestJson;
-                client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-                var apiUrl =
-                    $"https://api.steampowered.com/IInventoryService/GetItemDefMeta/v1?key={SteamWebAPIKey}&appid={AppID}";
-
-                client.Timeout = TimeSpan.FromSeconds(30);
-                var response = await LimitSteamWebApiGET(client,
-                    new HttpRequestMessage(HttpMethod.Get, apiUrl), cancellationToken);
-                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                var responseCode = response.StatusCode;
-                if (responseCode == HttpStatusCode.OK)
-                {
-                    _log.Debug("Got inventory digest.");
-                    digestJson = JsonDocument.Parse(responseBody);
-                }
-                else if (responseCode == HttpStatusCode.Forbidden && !UseXan105API)
-                {
-                    _log.Error(
-                        "Error 403 in getting game inventory digest, please check your Steam Web API key. Skipping...");
-                    throw new Exception("Error 403 in getting game inventory digest.");
-                }
-                else
-                {
-                    _log.Error("Error {Code} in getting game inventory digest. Skipping...", responseCode);
-                    throw new Exception($"Error {responseCode} in getting game inventory digest. Skipping...");
-                }
-
-                if (response.Content != null)
-                {
-                    var responsejson =
-                        JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken)
-                            .ConfigureAwait(false));
-                    if (responsejson.RootElement.TryGetProperty("response", out var responsedata))
-                        digest = responsedata.GetProperty("digest").ToString();
-                }
-
-                if (digest == null)
-                {
-                    _log.Debug("No inventory digest, skipping...");
-                    return;
-                }
-            }
-
-            using (var client = new HttpClient())
-            {
-                _log.Debug("Getting inventory items...");
-                client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-                client.Timeout = TimeSpan.FromSeconds(30);
-                var response = await LimitSteamWebApiGET(client,
-                        new HttpRequestMessage(HttpMethod.Get,
-                            $"https://api.steampowered.com/IGameInventory/GetItemDefArchive/v0001?appid={AppID}&digest={digest.Trim(new[] { '"' })}"),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    if (response.Content != null)
-                    {
-                        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                        var items = JsonNode.Parse(content.Trim(new[] { '\0' }))?.Root.AsArray();
-                        if (items?.Count > 0)
-                        {
-                            _log.Debug("Found items, generating...");
-                            var inventory = new JsonObject();
-                            var inventorydefault = new JsonObject();
-                            foreach (var item in items)
-                            {
-                                var x = new JsonObject();
-                                var index = item?["itemdefid"]?.ToString();
-
-                                if (item != null)
-                                    foreach (var t in item.AsObject())
-                                        if (t.Key != null && t.Value != null)
-                                            x.Add(t.Key, t.Value.ToString());
-
-                                inventory.Add(index, x);
-                                inventorydefault.Add(index, 1);
-                            }
-
-                            File.WriteAllText(Path.Combine(ConfigPath, "items.json"), inventory.ToString());
-                            File.WriteAllText(Path.Combine(ConfigPath, "default_items.json"),
-                                inventorydefault.ToString());
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        _log.Information("No inventory items. Skipping...");
-                        return;
-                    }
-                }
-                else
-                {
-                    throw new Exception($"Error {response.StatusCode} in getting game inventory.");
-                }
-            }
-
-            _log.Debug("Generated inventory info.");
-        }
-        catch (KeyNotFoundException)
-        {
-            _log.Information("No inventory, skipping...");
-        }
-        catch (OperationCanceledException)
-        {
-            _log.Debug("Operation was canceled.");
-        }
-        catch (Exception ex)
-        {
-            _log.Error(ex, "Failed to generate inventory info. Skipping...");
-        }
-    }
-
     private async Task GetAppInfo(uint appID)
     {
         await steam3.RequestAppInfo(appID, true).ConfigureAwait(false);
@@ -2034,134 +2034,6 @@ internal class GeneratorSteamWeb : Generator
         }
 
         _log.Debug("Generated DLCs.");
-    }
-
-    private async Task GenerateInventory(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (UseXan105API)
-            {
-                _log.Debug("Using xan105 API, skipping generate inventory...");
-                return;
-            }
-
-            _log.Debug("Generating inventory info...");
-            var digest = string.Empty;
-            using (var client = new HttpClient())
-            {
-                _log.Debug("Getting inventory digest...");
-                JsonDocument digestJson;
-                client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-                var apiUrl =
-                    $"https://api.steampowered.com/IInventoryService/GetItemDefMeta/v1?key={SteamWebAPIKey}&appid={AppID}";
-
-                client.Timeout = TimeSpan.FromSeconds(30);
-                var response = await LimitSteamWebApiGET(client,
-                    new HttpRequestMessage(HttpMethod.Get, apiUrl), cancellationToken);
-                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                var responseCode = response.StatusCode;
-                if (responseCode == HttpStatusCode.OK)
-                {
-                    _log.Debug("Got inventory digest.");
-                    digestJson = JsonDocument.Parse(responseBody);
-                }
-                else if (responseCode == HttpStatusCode.Forbidden && !UseXan105API)
-                {
-                    _log.Error(
-                        "Error 403 in getting game inventory digest, please check your Steam Web API key. Skipping...");
-                    throw new Exception("Error 403 in getting game inventory digest.");
-                }
-                else
-                {
-                    _log.Error("Error {Code} in getting game inventory digest. Skipping...", responseCode);
-                    throw new Exception($"Error {responseCode} in getting game inventory digest. Skipping...");
-                }
-
-                if (response.Content != null)
-                {
-                    var responsejson =
-                        JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken)
-                            .ConfigureAwait(false));
-                    if (responsejson.RootElement.TryGetProperty("response", out var responsedata))
-                        digest = responsedata.GetProperty("digest").ToString();
-                }
-
-                if (digest == null)
-                {
-                    _log.Debug("No inventory digest, skipping...");
-                    return;
-                }
-            }
-
-            using (var client = new HttpClient())
-            {
-                _log.Debug("Getting inventory items...");
-                client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-                client.Timeout = TimeSpan.FromSeconds(30);
-                var response = await LimitSteamWebApiGET(client,
-                        new HttpRequestMessage(HttpMethod.Get,
-                            $"https://api.steampowered.com/IGameInventory/GetItemDefArchive/v0001?appid={AppID}&digest={digest.Trim(new[] { '"' })}"),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    if (response.Content != null)
-                    {
-                        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                        var items = JsonNode.Parse(content.Trim(new[] { '\0' }))?.Root.AsArray();
-                        if (items?.Count > 0)
-                        {
-                            _log.Debug("Found items, generating...");
-                            var inventory = new JsonObject();
-                            var inventorydefault = new JsonObject();
-                            foreach (var item in items)
-                            {
-                                var x = new JsonObject();
-                                var index = item?["itemdefid"]?.ToString();
-
-                                if (item != null)
-                                    foreach (var t in item.AsObject())
-                                        if (t.Key != null && t.Value != null)
-                                            x.Add(t.Key, t.Value.ToString());
-
-                                inventory.Add(index, x);
-                                inventorydefault.Add(index, 1);
-                            }
-
-                            File.WriteAllText(Path.Combine(ConfigPath, "items.json"), inventory.ToString());
-                            File.WriteAllText(Path.Combine(ConfigPath, "default_items.json"),
-                                inventorydefault.ToString());
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        _log.Information("No inventory items. Skipping...");
-                        return;
-                    }
-                }
-                else
-                {
-                    throw new Exception($"Error {response.StatusCode} in getting game inventory.");
-                }
-            }
-
-            _log.Debug("Generated inventory info.");
-        }
-        catch (OperationCanceledException)
-        {
-            _log.Debug("Operation was canceled.");
-        }
-        catch (KeyNotFoundException)
-        {
-            _log.Information("No inventory, skipping...");
-        }
-        catch (Exception ex)
-        {
-            _log.Error(ex, "Failed to generate inventory info. Skipping...");
-        }
     }
 
     public override async Task InfoGenerator(CancellationToken cancellationToken = default)
