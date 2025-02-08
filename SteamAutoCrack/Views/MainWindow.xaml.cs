@@ -144,6 +144,7 @@ public partial class MainWindow
                 Restore.IsEnabled = false;
                 InputPath.IsEnabled = false;
                 Select.IsEnabled = false;
+                Settings.IsEnabled = false;
             });
 
             cts = new CancellationTokenSource();
