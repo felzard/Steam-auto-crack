@@ -114,7 +114,7 @@ public class Config
     public delegate void LanguageChangedHandler(Languages newLanguage);
     public static event LanguageChangedHandler? OnLanguageChanged;
 
-    public static Languages _language { get; set; } = GetDefaultLanguage();
+    private static Languages _language { get; set; } = GetDefaultLanguage();
 
     public static EMUApplyConfigs EMUApplyConfigs { get; set; } = new();
     public static EMUConfigs EMUConfigs { get; set; } = new();
