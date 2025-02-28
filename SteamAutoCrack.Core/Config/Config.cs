@@ -438,6 +438,11 @@ public class SteamStubUnpackerConfigs
     public SteamAPICheckBypassModes SteamAPICheckBypassMode { get; set; } = SteamAPICheckBypassModes.Disabled;
 
     /// <summary>
+    ///     DLL hijacking name for SteamAPICheckBypass
+    /// </summary>
+    public SteamAPICheckBypassDLLs SteamAPICheckBypassDLL { get; set; } = SteamAPICheckBypassDLLs.WINMM_DLL;
+
+    /// <summary>
     ///     SteamAPI Check Bypass Nth Time Setting
     /// </summary>
     public Int64 SteamAPICheckBypassNthTime { get; set; } = 1;
@@ -450,6 +455,7 @@ public class SteamStubUnpackerConfigs
         ReCalcChecksum = SteamStubUnpackerConfigDefault.ReCalcChecksum;
         UseExperimentalFeatures = SteamStubUnpackerConfigDefault.UseExperimentalFeatures;
         SteamAPICheckBypassMode = SteamStubUnpackerConfigDefault.SteamAPICheckBypassMode;
+        SteamAPICheckBypassDLL = SteamStubUnpackerConfigDefault.SteamAPICheckBypassDLL;
         SteamAPICheckBypassNthTime = SteamStubUnpackerConfigDefault.SteamAPICheckBypassNthTime;
     }
 
@@ -463,6 +469,7 @@ public class SteamStubUnpackerConfigs
             ReCalcChecksum = ReCalcChecksum,
             UseExperimentalFeatures = UseExperimentalFeatures,
             SteamAPICheckBypassMode = SteamAPICheckBypassMode,
+            SteamAPICheckBypassDLL = SteamAPICheckBypassDLL,
             SteamAPICheckBypassNthTime = SteamAPICheckBypassNthTime
         };
     }

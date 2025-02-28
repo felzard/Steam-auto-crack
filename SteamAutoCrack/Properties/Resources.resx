@@ -346,12 +346,15 @@
     <value>6. Restore Crack</value>
   </data>
   <data name="SteamAPICheckBypassMode" xml:space="preserve">
-    <value>SteamAPICheckBypass Mode:</value>
+    <value>SteamAPICheckBypass DLL:</value>
   </data>
   <data name="NthTime" xml:space="preserve">
     <value>Nth Time:</value>
   </data>
   <data name="Stop" xml:space="preserve">
     <value>Stop</value>
+  </data>
+  <data name="SteamAPICheckBypassDLL" xml:space="preserve">
+    <value>SteamAPICheckBypass Mode:</value>
   </data>
 </root>

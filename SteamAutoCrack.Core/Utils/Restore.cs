@@ -16,6 +16,20 @@ public class Restore : IRestore
         _log = Log.ForContext<Restore>();
     }
 
+    private List<string> FilesToDelete { get; } = new()
+    {
+        "steam_interfaces.txt",
+        "local_save.txt",
+        "SteamAPICheckBypass.json"
+    };
+
+    private List<string> BypassesToDelete { get; } = new()
+    {
+        "version.dll",
+        "winmm.dll",
+        "winhttp.dll"
+    };
+
     public async Task<bool> RestoreFile(string path)
     {
         return await Task.Run(() =>
@@ -30,20 +44,25 @@ public class Restore : IRestore
 
                 _log.Debug("Restoring cracked file...");
 
-                foreach (var pathtodelete in Directory.EnumerateFiles(path, "steam_interfaces.txt",
-                             SearchOption.AllDirectories))
-                    try
-                    {
-                        _log.Debug("Deleting \"{path}\"...", pathtodelete);
-                        File.Delete(pathtodelete);
-                    }
-                    catch (Exception e)
-                    {
-                        _log.Debug(e, "Failed to delete \"{pathtodelete}\". Skipping...", pathtodelete);
-                    }
+                // Delete SteamAPICheckBypass only when it's config file exists...
+                if (Directory.EnumerateFiles(path, "SteamAPICheckBypass.json", SearchOption.AllDirectories).Any())
+                {
+                    _log.Debug("Deleting bypasses...");
+                    foreach (var file in BypassesToDelete)
+                    foreach (var pathtodelete in Directory.EnumerateFiles(path, file, SearchOption.AllDirectories))
+                        try
+                        {
+                            _log.Debug("Deleting \"{path}\"...", pathtodelete);
+                            File.Delete(pathtodelete);
+                        }
+                        catch (Exception ex)
+                        {
+                            _log.Debug(ex, "Failed to delete \"{pathtodelete}\". Skipping...", pathtodelete);
+                        }
+                }
 
-                foreach (var pathtodelete in Directory.EnumerateFiles(path, "local_save.txt",
-                             SearchOption.AllDirectories))
+                foreach (var file in FilesToDelete)
+                foreach (var pathtodelete in Directory.EnumerateFiles(path, file, SearchOption.AllDirectories))
                     try
                     {
                         _log.Debug("Deleting \"{path}\"...", pathtodelete);
@@ -67,30 +86,6 @@ public class Restore : IRestore
                     catch (Exception ex)
                     {
                         _log.Debug(ex, "Failed to restore \"{pathtodelete}\". Skipping...", pathtorestore);
-                    }
-
-                foreach (var pathtodelete in Directory.EnumerateFiles(path, "SteamAPICheckBypass.json",
-                             SearchOption.AllDirectories))
-                    try
-                    {
-                        _log.Debug("Deleting \"{path}\"...", pathtodelete);
-                        File.Delete(pathtodelete);
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.Debug(ex, "Failed to delete \"{pathtodelete}\". Skipping...", pathtodelete);
-                    }
-
-                foreach (var pathtodelete in Directory.EnumerateFiles(path, "version.dll",
-                             SearchOption.AllDirectories))
-                    try
-                    {
-                        _log.Debug("Deleting \"{path}\"...", pathtodelete);
-                        File.Delete(pathtodelete);
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.Debug(ex, "Failed to delete \"{pathtodelete}\". Skipping...", pathtodelete);
                     }
 
                 foreach (var pathtodelete in Directory.EnumerateDirectories(path, "steam_settings",

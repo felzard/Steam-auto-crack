@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using SteamAutoCrack.Core.Config;
 using SteamAutoCrack.Core.Utils;
+using SteamAutoCrack.Properties;
 
 namespace SteamAutoCrack.ViewModels;
 
@@ -18,6 +19,8 @@ internal class MainWindowViewModel : INotifyPropertyChanged
         Languages = Enum.GetValues(typeof(EMUConfig.Languages)).Cast<EMUConfig.Languages>().ToList();
         SteamAPICheckBypassModes = Enum.GetValues(typeof(SteamStubUnpackerConfig.SteamAPICheckBypassModes))
             .Cast<SteamStubUnpackerConfig.SteamAPICheckBypassModes>().ToList();
+        SteamAPICheckBypassDLLs = Enum.GetValues(typeof(SteamStubUnpackerConfig.SteamAPICheckBypassDLLs))
+            .Cast<SteamStubUnpackerConfig.SteamAPICheckBypassDLLs>().ToList();
     }
 
     #region INPC
@@ -76,7 +79,7 @@ internal class MainWindowViewModel : INotifyPropertyChanged
 
     public string Ver => "SteamAutoCrack " + Assembly.GetExecutingAssembly().GetName().Version;
 
-    private string _StartBtnString = Properties.Resources.Start;
+    private string _StartBtnString = Resources.Start;
 
     #endregion
 
@@ -478,7 +481,7 @@ internal class MainWindowViewModel : INotifyPropertyChanged
 
     public List<SteamStubUnpackerConfig.SteamAPICheckBypassModes> SteamAPICheckBypassModes { get; set; }
 
-    public Int64 SteamAPICheckBypassNthTime
+    public long SteamAPICheckBypassNthTime
     {
         get => Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime;
 
@@ -491,6 +494,22 @@ internal class MainWindowViewModel : INotifyPropertyChanged
             }
         }
     }
+
+    public SteamStubUnpackerConfig.SteamAPICheckBypassDLLs SteamAPICheckBypassDLL
+    {
+        get => Config.SteamStubUnpackerConfigs.SteamAPICheckBypassDLL;
+
+        set
+        {
+            if (value != Config.SteamStubUnpackerConfigs.SteamAPICheckBypassDLL)
+            {
+                Config.SteamStubUnpackerConfigs.SteamAPICheckBypassDLL = value;
+                NotifyPropertyChanged();
+            }
+        }
+    }
+
+    public List<SteamStubUnpackerConfig.SteamAPICheckBypassDLLs> SteamAPICheckBypassDLLs { get; set; }
 
     #endregion
 

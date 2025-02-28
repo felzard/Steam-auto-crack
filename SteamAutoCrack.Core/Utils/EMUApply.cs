@@ -20,7 +20,7 @@ public class EMUApplyConfig
     /// <summary>
     ///     Path to apply steam emulator.
     /// </summary>
-    public string ApplyPath { get; set; } = String.Empty;
+    public string ApplyPath { get; set; } = string.Empty;
 
     /// <summary>
     ///     Emulator save location.
@@ -246,7 +246,7 @@ public class EMUApply : IEMUApply
 
                 configsuser.Add(new Section("user::saves", "")
                 {
-                    new("local_save_path", emuApplyConfig.LocalSave,
+                    new Property("local_save_path", emuApplyConfig.LocalSave,
                         " when this is set, it will force the emu to use the specified location instead of the default global location",
                         " path could be absolute, or relative to the location of the .dll/.so",
                         " leading and trailing whitespaces are trimmed",
@@ -300,7 +300,7 @@ public class EMUApply : IEMUApply
 
                 configsuser.Add(new Section("user::saves", "")
                 {
-                    new("local_save_path", emuApplyConfig.LocalSave,
+                    new Property("local_save_path", emuApplyConfig.LocalSave,
                         " when this is set, it will force the emu to use the specified location instead of the default global location",
                         " path could be absolute, or relative to the location of the .dll/.so",
                         " leading and trailing whitespaces are trimmed",

@@ -10,6 +10,13 @@ namespace SteamAutoCrack.Core.Utils;
 
 public class SteamStubUnpackerConfig
 {
+    public enum SteamAPICheckBypassDLLs
+    {
+        [Description("winmm.dll")] WINMM_DLL,
+        [Description("version.dll")] VERSION_DLL,
+        [Description("winhttp.dll")] WINHTTP_DLL
+    }
+
     public enum SteamAPICheckBypassModes
     {
         [Description("Disabled")] Disabled,
@@ -51,6 +58,11 @@ public class SteamStubUnpackerConfig
     public SteamAPICheckBypassModes SteamAPICheckBypassMode { get; set; } = SteamAPICheckBypassModes.Disabled;
 
     /// <summary>
+    ///     DLL hijacking name for SteamAPICheckBypass
+    /// </summary>
+    public SteamAPICheckBypassDLLs SteamAPICheckBypassDLL { get; set; } = SteamAPICheckBypassDLLs.WINMM_DLL;
+
+    /// <summary>
     ///     SteamAPI Check Bypass Nth Time Setting
     /// </summary>
     public long SteamAPICheckBypassNthTime { get; set; } = 1;
@@ -90,6 +102,12 @@ public class SteamStubUnpackerConfigDefault
         SteamStubUnpackerConfig.SteamAPICheckBypassModes.Disabled;
 
     /// <summary>
+    ///     DLL hijacking name for SteamAPICheckBypass
+    /// </summary>
+    public static readonly SteamStubUnpackerConfig.SteamAPICheckBypassDLLs SteamAPICheckBypassDLL =
+        SteamStubUnpackerConfig.SteamAPICheckBypassDLLs.WINMM_DLL;
+
+    /// <summary>
     ///     SteamAPI Check Bypass Nth Time Setting
     /// </summary>
     public static readonly long SteamAPICheckBypassNthTime = 1;
@@ -119,6 +137,7 @@ public class SteamStubUnpacker : ISteamStubUnpacker
             UseExperimentalFeatures = SteamStubUnpackerConfig.UseExperimentalFeatures
         };
         _SteamAPICheckBypassMode = SteamStubUnpackerConfig.SteamAPICheckBypassMode;
+        _SteamAPICheckBypassDLL = SteamStubUnpackerConfig.SteamAPICheckBypassDLL;
         _SteamAPICheckBypassNthTime = SteamStubUnpackerConfig.SteamAPICheckBypassNthTime;
         steamlessLoggingService.AddLogMessage += (sender, e) =>
         {
@@ -135,6 +154,7 @@ public class SteamStubUnpacker : ISteamStubUnpacker
     }
 
     private SteamStubUnpackerConfig.SteamAPICheckBypassModes _SteamAPICheckBypassMode { get; }
+    private SteamStubUnpackerConfig.SteamAPICheckBypassDLLs _SteamAPICheckBypassDLL { get; }
     private long _SteamAPICheckBypassNthTime { get; }
 
     public async Task<bool> Unpack(string path)
@@ -270,6 +290,19 @@ public class SteamStubUnpacker : ISteamStubUnpacker
             var pathsList = new List<string>(dllPaths?.Split(';'));
             var dllPath = "";
             var dll = "";
+            var targetDllName = _SteamAPICheckBypassDLL switch
+            {
+                SteamStubUnpackerConfig.SteamAPICheckBypassDLLs.WINMM_DLL => "winmm.dll",
+                SteamStubUnpackerConfig.SteamAPICheckBypassDLLs.VERSION_DLL => "version.dll",
+                SteamStubUnpackerConfig.SteamAPICheckBypassDLLs.WINHTTP_DLL => "winhttp.dll",
+                _ => "winmm.dll"
+            };
+            var bypassDllNames = new List<string>
+            {
+                "winmm.dll",
+                "version.dll",
+                "winhttp.dll"
+            };
             foreach (var dirPath in pathsList)
             {
                 var fullPath = Path.Combine(dirPath, "SteamAPICheckBypass");
@@ -284,16 +317,17 @@ public class SteamStubUnpacker : ISteamStubUnpacker
             {
                 foreach (var file in Directory.GetFiles(path, "*.exe", SearchOption.AllDirectories))
                 {
+                    foreach (var bypassDllName in bypassDllNames)
+                        if (File.Exists(Path.Combine(Path.GetDirectoryName(file), bypassDllName)))
+                            _log.Information("Steam API Check Bypass dll already exists, skipping...");
+
                     var f = new Pe32File(file);
                     f.Parse();
                     if (!f.IsFile64Bit())
                         dll = Path.Combine(dllPath, "SteamAPICheckBypass_x32.dll");
                     else
                         dll = Path.Combine(dllPath, "SteamAPICheckBypass.dll");
-                    if (File.Exists(Path.Combine(Path.GetDirectoryName(file), "version.dll")))
-                        _log.Information("Steam API Check Bypass dll already exists, skipping...");
-                    else
-                        File.Copy(dll, Path.Combine(Path.GetDirectoryName(file), "version.dll"));
+                    File.Copy(dll, Path.Combine(Path.GetDirectoryName(file), targetDllName));
                     var jsonContent = new Dictionary<string, object>();
                     if (File.Exists(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json")))
                     {
@@ -357,16 +391,17 @@ public class SteamStubUnpacker : ISteamStubUnpacker
             }
             else
             {
+                foreach (var bypassDllName in bypassDllNames)
+                    if (File.Exists(Path.Combine(Path.GetDirectoryName(path), bypassDllName)))
+                        _log.Information("Steam API Check Bypass dll already exists, skipping...");
+
                 var f = new Pe32File(path);
                 f.Parse();
                 if (!f.IsFile64Bit())
                     dll = Path.Combine(dllPath, "SteamAPICheckBypass_x32.dll");
                 else
                     dll = Path.Combine(dllPath, "SteamAPICheckBypass.dll");
-                if (File.Exists(Path.Combine(Path.GetDirectoryName(path), "version.dll")))
-                    _log.Information("Steam API Check Bypass dll already exists, skipping...");
-                else
-                    File.Copy(dll, Path.Combine(Path.GetDirectoryName(path), "version.dll"));
+                File.Copy(dll, Path.Combine(Path.GetDirectoryName(path), targetDllName));
                 var jsonContent = new Dictionary<string, object>
                 {
                     {

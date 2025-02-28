@@ -657,6 +657,15 @@ namespace SteamAutoCrack.Properties {
         /// <summary>
         ///   查找类似 SteamAPICheckBypass Mode: 的本地化字符串。
         /// </summary>
+        public static string SteamAPICheckBypassDLL {
+            get {
+                return ResourceManager.GetString("SteamAPICheckBypassDLL", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   查找类似 SteamAPICheckBypass DLL: 的本地化字符串。
+        /// </summary>
         public static string SteamAPICheckBypassMode {
             get {
                 return ResourceManager.GetString("SteamAPICheckBypassMode", resourceCulture);
