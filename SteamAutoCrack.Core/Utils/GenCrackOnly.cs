@@ -64,6 +64,14 @@ public class GenCrackOnly : IGenCrackOnly
         _log = Log.ForContext<GenCrackOnly>();
     }
 
+    private readonly List<string> steamApiCheckBypassFileList = new()
+    {
+        "SteamAPICheckBypass.json",
+        "version.dll",
+        "winmm.dll",
+        "winhttp.dll"
+    };
+
     public async Task<bool> Applier(GenCrackOnlyConfig config)
     {
         return await Task.Run(() =>
@@ -132,11 +140,12 @@ public class GenCrackOnly : IGenCrackOnly
                         Path.Combine(config.OutputPath, "Crack", Path.GetRelativePath(config.SourcePath, origpath)));
                 }
 
-                foreach (var path in Directory.EnumerateFiles(config.SourcePath, "SteamAPICheckBypass.json", SearchOption.AllDirectories))
-                    bypassfiles.Add(path);
-                foreach (var path in Directory.EnumerateFiles(config.SourcePath, "version.dll", SearchOption.AllDirectories))
-                    bypassfiles.Add(path);
-
+                foreach (var filename in steamApiCheckBypassFileList)
+                {
+                    foreach (var path in Directory.EnumerateFiles(config.SourcePath, filename, SearchOption.AllDirectories))
+                        bypassfiles.Add(path);
+                }
+                
                 foreach (var path in bypassfiles)
                 {
                     if (!Directory.Exists(Path.Combine(config.OutputPath, "Crack",

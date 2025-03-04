@@ -16,14 +16,14 @@ public class Restore : IRestore
         _log = Log.ForContext<Restore>();
     }
 
-    private List<string> FilesToDelete { get; } = new()
+    private readonly List<string> FilesToDelete = new()
     {
         "steam_interfaces.txt",
         "local_save.txt",
         "SteamAPICheckBypass.json"
     };
 
-    private List<string> BypassesToDelete { get; } = new()
+    private readonly List<string> BypassesToDelete = new()
     {
         "version.dll",
         "winmm.dll",

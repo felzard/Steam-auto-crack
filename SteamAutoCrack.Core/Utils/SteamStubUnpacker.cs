@@ -317,9 +317,15 @@ public class SteamStubUnpacker : ISteamStubUnpacker
             {
                 foreach (var file in Directory.GetFiles(path, "*.exe", SearchOption.AllDirectories))
                 {
+                    bool skipFile = false;
                     foreach (var bypassDllName in bypassDllNames)
                         if (File.Exists(Path.Combine(Path.GetDirectoryName(file), bypassDllName)))
+                        {
                             _log.Information("Steam API Check Bypass dll already exists, skipping...");
+                            skipFile = true;
+                        }
+                    if (skipFile)
+                        continue;
 
                     var f = new Pe32File(file);
                     f.Parse();
@@ -393,7 +399,12 @@ public class SteamStubUnpacker : ISteamStubUnpacker
             {
                 foreach (var bypassDllName in bypassDllNames)
                     if (File.Exists(Path.Combine(Path.GetDirectoryName(path), bypassDllName)))
+                    {
                         _log.Information("Steam API Check Bypass dll already exists, skipping...");
+                        return;
+                    }
+                        
+                        
 
                 var f = new Pe32File(path);
                 f.Parse();
