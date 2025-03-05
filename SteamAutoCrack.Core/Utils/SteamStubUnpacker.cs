@@ -65,7 +65,7 @@ public class SteamStubUnpackerConfig
     /// <summary>
     ///     SteamAPI Check Bypass Nth Time Setting
     /// </summary>
-    public long SteamAPICheckBypassNthTime { get; set; } = 1;
+    public List<UInt64> SteamAPICheckBypassNthTime { get; set; } = new() {1};
 }
 
 public class SteamStubUnpackerConfigDefault
@@ -110,7 +110,7 @@ public class SteamStubUnpackerConfigDefault
     /// <summary>
     ///     SteamAPI Check Bypass Nth Time Setting
     /// </summary>
-    public static readonly long SteamAPICheckBypassNthTime = 1;
+    public static readonly List<UInt64> SteamAPICheckBypassNthTime = new() {1};
 }
 
 public interface ISteamStubUnpacker
@@ -155,7 +155,7 @@ public class SteamStubUnpacker : ISteamStubUnpacker
 
     private SteamStubUnpackerConfig.SteamAPICheckBypassModes _SteamAPICheckBypassMode { get; }
     private SteamStubUnpackerConfig.SteamAPICheckBypassDLLs _SteamAPICheckBypassDLL { get; }
-    private long _SteamAPICheckBypassNthTime { get; }
+    private List<UInt64> _SteamAPICheckBypassNthTime { get; }
 
     public async Task<bool> Unpack(string path)
     {

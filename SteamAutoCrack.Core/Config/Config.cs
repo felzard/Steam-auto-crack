@@ -445,7 +445,7 @@ public class SteamStubUnpackerConfigs
     /// <summary>
     ///     SteamAPI Check Bypass Nth Time Setting
     /// </summary>
-    public Int64 SteamAPICheckBypassNthTime { get; set; } = 1;
+    public List<UInt64> SteamAPICheckBypassNthTime { get; set; } = new() {1};
 
     public void ResettoDefault()
     {

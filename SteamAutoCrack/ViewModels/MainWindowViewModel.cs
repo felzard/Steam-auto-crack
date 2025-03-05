@@ -481,15 +481,29 @@ internal class MainWindowViewModel : INotifyPropertyChanged
 
     public List<SteamStubUnpackerConfig.SteamAPICheckBypassModes> SteamAPICheckBypassModes { get; set; }
 
-    public long SteamAPICheckBypassNthTime
+    public string SteamAPICheckBypassNthTime
     {
-        get => Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime;
-
+        get => string.Join(",", Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime);
         set
         {
-            if (value != Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime)
+            var currentValue = string.Join(",", Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime);
+            if (value != currentValue)
             {
-                Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime = value;
+                var parts = value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                var newList = new List<UInt64>();
+                foreach (var part in parts)
+                {
+                    if (UInt64.TryParse(part.Trim(), out var num))
+                    {
+                        newList.Add(num);
+                    }
+                    else
+                    {
+                        // Invalid input
+                        return;
+                    }
+                }
+                Config.SteamStubUnpackerConfigs.SteamAPICheckBypassNthTime = newList;
                 NotifyPropertyChanged();
             }
         }
