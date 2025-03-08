@@ -237,20 +237,7 @@ internal abstract class Generator
 
             _log.Debug($"Getting schema for App {AppID}");
 
-            var language = string.Empty;
-
-            switch (Config.Config.Language)
-            {
-                case Config.Config.Languages.en_US:
-                    language += "english";
-                    break;
-                case Config.Config.Languages.zh_CN:
-                    language += "schinese";
-                    break;
-                default:
-                    language += "english";
-                    break;
-            }
+            var language = Config.Config.EMUConfigs.Language.ToString();
 
             var client = new HttpClient();
             client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
