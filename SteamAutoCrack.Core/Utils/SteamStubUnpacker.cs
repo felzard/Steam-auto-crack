@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Text.Json;
 using Serilog;
 using Steamless.API.Model;
@@ -313,127 +314,71 @@ public class SteamStubUnpacker : ISteamStubUnpacker
                 }
             }
 
+            var files = new List<string>();
+
             if (folder)
             {
-                foreach (var file in Directory.GetFiles(path, "*.exe", SearchOption.AllDirectories))
-                {
-                    bool skipFile = false;
-                    foreach (var bypassDllName in bypassDllNames)
-                        if (File.Exists(Path.Combine(Path.GetDirectoryName(file), bypassDllName)))
-                        {
-                            _log.Information("Steam API Check Bypass dll already exists, skipping...");
-                            skipFile = true;
-                        }
-                    if (skipFile)
-                        continue;
-
-                    var f = new Pe32File(file);
-                    f.Parse();
-                    if (!f.IsFile64Bit())
-                        dll = Path.Combine(dllPath, "SteamAPICheckBypass_x32.dll");
-                    else
-                        dll = Path.Combine(dllPath, "SteamAPICheckBypass.dll");
-                    File.Copy(dll, Path.Combine(Path.GetDirectoryName(file), targetDllName));
-                    var jsonContent = new Dictionary<string, object>();
-                    if (File.Exists(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json")))
-                    {
-                        var oldjsonString =
-                            File.ReadAllText(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json"));
-                        jsonContent = JsonSerializer.Deserialize<Dictionary<string, object>>(oldjsonString);
-                    }
-
-                    jsonContent[Path.GetFileName(file)] = new
-                    {
-                        mode = "file_redirect",
-                        to = Path.GetFileName(file) + ".bak",
-                        file_must_exist = true
-                    };
-
-                    var apidlls = Directory.GetFiles(path, "steam_api.dll",
-                            SearchOption.AllDirectories)
-                        .Select(p => Path.GetRelativePath(Path.GetDirectoryName(file), p)).ToArray();
-                    apidlls = apidlls.Concat(Directory
-                        .GetFiles(path, "steam_api64.dll", SearchOption.AllDirectories)
-                        .Select(p => Path.GetRelativePath(Path.GetDirectoryName(file), p))).ToArray();
-                    foreach (var apiDllPath in apidlls)
-                        jsonContent[Path.Combine(Path.GetDirectoryName(apiDllPath), "steam_settings")] = new
-                        {
-                            mode = "file_hide"
-                        };
-                    foreach (var apiDllPath in apidlls)
-                        if (_SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.All)
-                            jsonContent[apiDllPath] = new
-                            {
-                                mode = "file_redirect",
-                                to = apiDllPath + ".bak",
-                                file_must_exist = true
-                            };
-                        else if (_SteamAPICheckBypassMode ==
-                                 SteamStubUnpackerConfig.SteamAPICheckBypassModes.OnlyN)
-                            jsonContent[apiDllPath] = new
-                            {
-                                mode = "file_redirect",
-                                to = apiDllPath + ".bak",
-                                file_must_exist = true,
-                                hook_times_mode = "nth_time_only",
-                                hook_time_n = _SteamAPICheckBypassNthTime
-                            };
-                        else if (_SteamAPICheckBypassMode ==
-                                 SteamStubUnpackerConfig.SteamAPICheckBypassModes.OnlyNotN)
-                            jsonContent[apiDllPath] = new
-                            {
-                                mode = "file_redirect",
-                                to = apiDllPath + ".bak",
-                                file_must_exist = true,
-                                hook_times_mode = "not_nth_time_only",
-                                hook_time_n = _SteamAPICheckBypassNthTime
-                            };
-
-                    var jsonString = JsonSerializer.Serialize(jsonContent,
-                        new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json"),
-                        jsonString);
-                }
+                files = Directory.GetFiles(path, "*.exe", SearchOption.AllDirectories).ToList<string>();
             }
             else
             {
+                files.Add(path);
+            }
+
+            foreach (var file in files)
+            {
+                bool skipFile = false;
                 foreach (var bypassDllName in bypassDllNames)
-                    if (File.Exists(Path.Combine(Path.GetDirectoryName(path), bypassDllName)))
+                    if (File.Exists(Path.Combine(Path.GetDirectoryName(file), bypassDllName)))
                     {
                         _log.Information("Steam API Check Bypass dll already exists, skipping...");
-                        return;
+                        skipFile = true;
                     }
-                        
-                        
+                if (skipFile)
+                    continue;
 
-                var f = new Pe32File(path);
+                var f = new Pe32File(file);
                 f.Parse();
                 if (!f.IsFile64Bit())
                     dll = Path.Combine(dllPath, "SteamAPICheckBypass_x32.dll");
                 else
                     dll = Path.Combine(dllPath, "SteamAPICheckBypass.dll");
-                File.Copy(dll, Path.Combine(Path.GetDirectoryName(path), targetDllName));
-                var jsonContent = new Dictionary<string, object>
+                File.Copy(dll, Path.Combine(Path.GetDirectoryName(file), targetDllName));
+                var jsonContent = new Dictionary<string, object>();
+                if (File.Exists(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json")))
                 {
-                    {
-                        Path.GetFileName(path),
-                        new
-                        {
-                            mode = "file_redirect",
-                            to = Path.GetFileName(path) + ".bak",
-                            file_must_exist = true
-                        }
-                    }
+                    var oldjsonString =
+                        File.ReadAllText(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json"));
+                    jsonContent = JsonSerializer.Deserialize<Dictionary<string, object>>(oldjsonString);
+                }
+
+                jsonContent[Path.GetFileName(file)] = new
+                {
+                    mode = "file_redirect",
+                    to = Path.GetFileName(file) + ".bak",
+                    file_must_exist = true
                 };
 
-                var apidlls = Directory.GetFiles(Path.GetDirectoryName(path), "steam_api.dll",
-                        SearchOption.AllDirectories)
-                    .Select(p => Path.GetRelativePath(Path.GetDirectoryName(path), p)).ToArray();
+                string filepath;
+
+                if (folder)
+                {
+                    filepath = path;
+                }
+                else
+                {
+                    filepath = Path.GetDirectoryName(file);
+                }
+
+                var apidlls = Directory.GetFiles(filepath, "steam_api.dll",
+                    SearchOption.AllDirectories)
+                    .Select(p => Path.GetRelativePath(Path.GetDirectoryName(file), p)).ToArray();
                 apidlls = apidlls.Concat(Directory
-                    .GetFiles(Path.GetDirectoryName(path), "steam_api64.dll", SearchOption.AllDirectories)
-                    .Select(p => Path.GetRelativePath(Path.GetDirectoryName(path), p))).ToArray();
-                foreach (var apiDllPath in apidlls)
-                    jsonContent[Path.Combine(Path.GetDirectoryName(apiDllPath), "steam_settings")] = new
+                    .GetFiles(filepath, "steam_api64.dll", SearchOption.AllDirectories)
+                    .Select(p => Path.GetRelativePath(Path.GetDirectoryName(file), p))).ToArray();
+                var steamsettingsPaths = Directory.GetDirectories(filepath,"steam_settings",SearchOption.AllDirectories).Select(p => Path.GetRelativePath(Path.GetDirectoryName(file), p)).ToArray();
+                foreach (var steamsettingsPath in steamsettingsPaths)
+                    jsonContent[Path.Combine(Path.GetDirectoryName(steamsettingsPath), "steam_settings")] = new
                     {
                         mode = "file_hide"
                     };
@@ -445,29 +390,28 @@ public class SteamStubUnpacker : ISteamStubUnpacker
                             to = apiDllPath + ".bak",
                             file_must_exist = true
                         };
-                    else if (_SteamAPICheckBypassMode == SteamStubUnpackerConfig.SteamAPICheckBypassModes.OnlyN)
+                    else
+                    {
+                        string mode = _SteamAPICheckBypassMode switch
+                        {
+                            SteamStubUnpackerConfig.SteamAPICheckBypassModes.OnlyN => "nth_time_only",
+                            SteamStubUnpackerConfig.SteamAPICheckBypassModes.OnlyNotN => "not_nth_time_only",
+                            _ => throw new InvalidOperationException("Invalid SteamAPICheckBypassMode")
+                        };
+
                         jsonContent[apiDllPath] = new
                         {
                             mode = "file_redirect",
                             to = apiDllPath + ".bak",
                             file_must_exist = true,
-                            hook_times_mode = "nth_time_only",
+                            hook_times_mode = mode,
                             hook_time_n = _SteamAPICheckBypassNthTime
                         };
-                    else if (_SteamAPICheckBypassMode ==
-                             SteamStubUnpackerConfig.SteamAPICheckBypassModes.OnlyNotN)
-                        jsonContent[apiDllPath] = new
-                        {
-                            mode = "file_redirect",
-                            to = apiDllPath + ".bak",
-                            file_must_exist = true,
-                            hook_times_mode = "not_nth_time_only",
-                            hook_time_n = _SteamAPICheckBypassNthTime
-                        };
+                    }
 
                 var jsonString = JsonSerializer.Serialize(jsonContent,
                     new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(Path.Combine(Path.GetDirectoryName(path), "SteamAPICheckBypass.json"),
+                File.WriteAllText(Path.Combine(Path.GetDirectoryName(file), "SteamAPICheckBypass.json"),
                     jsonString);
             }
 
