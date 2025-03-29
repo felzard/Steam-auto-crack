@@ -435,17 +435,17 @@ public class SteamStubUnpackerConfigs
     /// <summary>
     ///     SteamAPICheckBypass Mode
     /// </summary>
-    public SteamAPICheckBypassModes SteamAPICheckBypassMode { get; set; } = SteamAPICheckBypassModes.Disabled;
+    public SteamAPICheckBypassModes SteamAPICheckBypassMode { get; set; } = SteamStubUnpackerConfigDefault.SteamAPICheckBypassMode;
 
     /// <summary>
     ///     DLL hijacking name for SteamAPICheckBypass
     /// </summary>
-    public SteamAPICheckBypassDLLs SteamAPICheckBypassDLL { get; set; } = SteamAPICheckBypassDLLs.WINMM_DLL;
+    public SteamAPICheckBypassDLLs SteamAPICheckBypassDLL { get; set; } = SteamStubUnpackerConfigDefault.SteamAPICheckBypassDLL;
 
     /// <summary>
     ///     SteamAPI Check Bypass Nth Time Setting
     /// </summary>
-    public List<UInt64> SteamAPICheckBypassNthTime { get; set; } = new() {1};
+    public List<UInt64> SteamAPICheckBypassNthTime { get; set; } = SteamStubUnpackerConfigDefault.SteamAPICheckBypassNthTime;
 
     public void ResettoDefault()
     {
