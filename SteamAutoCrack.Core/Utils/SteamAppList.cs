@@ -58,67 +58,88 @@ public class SteamAppList
     public static async Task Initialize(bool forceupdate = false)
     {
         _log = Log.ForContext<SteamAppList>();
-        const int maxRetryAttempts = 5;
-        var retryAttempts = 0;
 
-        while (retryAttempts < maxRetryAttempts)
-            try
+        try
+        {
+            bDisposed = true;
+            _log.Debug("Initializing Steam App list...");
+            if (!Directory.Exists(Config.Config.TempPath))
+                Directory.CreateDirectory(Config.Config.TempPath);
+
+            _initializationTcs = new TaskCompletionSource<bool>();
+
+            db = new SQLiteAsyncConnection(Database);
+            await db.CreateTableAsync<SteamApp>().ConfigureAwait(false);
+            var count = await db.Table<SteamApp>().CountAsync().ConfigureAwait(false);
+
+            bool dbExistsWithData = File.Exists(Database) && count > 0;
+            bool needsUpdate = DateTime.Now.Subtract(File.GetLastWriteTimeUtc(Database)).TotalDays >= 1 || count == 0 || forceupdate;
+            if (bInited && !needsUpdate && !forceupdate)
             {
-                bDisposed = true;
-                _initializationTcs = new TaskCompletionSource<bool>();
-                if (bInited && !forceupdate)
-                {
-                    _log.Debug("Already initialized Steam App list.");
-                    return;
-                }
-
-                _log.Debug("Initializing Steam App list...");
-                bInited = false;
-                if (!Directory.Exists(Config.Config.TempPath)) Directory.CreateDirectory(Config.Config.TempPath);
-                db = new SQLiteAsyncConnection(Database);
-                await db.CreateTableAsync<SteamApp>().ConfigureAwait(false);
-                var countAsync = await db.Table<SteamApp>().CountAsync().ConfigureAwait(false);
-                if (DateTime.Now.Subtract(File.GetLastWriteTimeUtc(Database)).TotalDays >= 1 || countAsync == 0 ||
-                    forceupdate)
-                {
-                    _log.Information("Updating Steam Applist...");
-                    var client = new HttpClient();
-                    var appList = new HashSet<SteamApp>();
-                    var response = await client.GetAsync(steamapplisturl).ConfigureAwait(false);
-                    var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    var steamApps = DeserializeSteamApps(responseBody);
-                    if (steamApps?.AppList?.Apps != null)
-                        foreach (var appListApp in steamApps.AppList.Apps)
-                            appList.Add(appListApp);
-
-                    await db.InsertAllAsync(appList, "OR IGNORE").ConfigureAwait(false);
-                    _log.Information("Updated Steam App list.");
-                }
-                else
-                {
-                    _log.Information("Applist already updated to latest version.");
-                }
-
-                _log.Debug("App Count: {count}",
-                    db.Table<SteamApp>().CountAsync().ConfigureAwait(false).GetAwaiter().GetResult());
-                _log.Information("Initialized Steam App list.");
-                bInited = true;
-                _initializationTcs.TrySetResult(true);
+                _log.Debug("Already initialized Steam App list.");
                 return;
             }
-            catch (Exception ex)
+
+            // Make db firstly inited if there's data
+            if (dbExistsWithData)
             {
-                retryAttempts++;
-                _log.Error(
-                    $"Failed to initialize Steam App list, attempt {retryAttempts} of {maxRetryAttempts}. Retrying...",
-                    ex);
-                if (retryAttempts >= maxRetryAttempts)
+                _log.Debug("Database exists with {count} apps. Marking as initialized.", count);
+                bInited = true;
+                _initializationTcs.TrySetResult(true);
+            }
+
+            if (needsUpdate)
+            {
+                while (true)
                 {
-                    _log.Error(
-                        "Max retry attempts reached. Initialization failed, please retry update Applist in settings.");
-                    throw;
+                    try
+                    {
+                        _log.Information("Updating Steam App list...");
+                        using var client = new HttpClient();
+                        var response = await client.GetAsync(steamapplisturl).ConfigureAwait(false);
+                        response.EnsureSuccessStatusCode();
+                        var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                        var steamApps = DeserializeSteamApps(responseBody);
+                        var appList = new HashSet<SteamApp>();
+                        if (steamApps?.AppList?.Apps != null)
+                        {
+                            foreach (var app in steamApps.AppList.Apps)
+                                appList.Add(app);
+                        }
+
+                        await db.InsertAllAsync(appList, "OR IGNORE").ConfigureAwait(false);
+                        _log.Information("Updated Steam App list.");
+
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error("Failed to initialize Steam App list, Retrying...", ex);
+                    }
                 }
             }
+            else
+            {
+                _log.Information("Applist already updated to latest version.");
+            }
+
+            if (!dbExistsWithData)
+            {
+                bInited = true;
+                _initializationTcs.TrySetResult(true);
+            }
+
+            var updatedCount = await db.Table<SteamApp>().CountAsync().ConfigureAwait(false);
+            _log.Information("Initialized Steam App list, App Count: {count}", updatedCount);
+            return;
+        }
+        catch (Exception ex)
+        {
+            _log.Error("Failed to initialize Steam App list.", ex);
+            bDisposed = false;
+            return;
+        }
     }
 
     public static async Task WaitForReady()
