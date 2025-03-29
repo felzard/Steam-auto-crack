@@ -42,6 +42,98 @@ public partial class MainWindow
     private bool bStarted;
     private CancellationTokenSource cts = new();
 
+    private enum UIState
+    {
+        Idle,
+        Processing,
+        ProcessingNoStop,
+        AnotherWindowOpened,
+    }
+
+    private UIState _currentUIState = UIState.Idle;
+
+    /// <summary>
+    /// UI State Machine
+    /// </summary>
+    private void UpdateUIState(UIState newState)
+    {
+        _currentUIState = newState;
+        Dispatcher.Invoke(() =>
+        {
+            switch (newState)
+            {
+                case UIState.Idle:
+                    Start.IsEnabled = true;
+                    AppIDFinder.IsEnabled = true;
+                    Settings.IsEnabled = true;
+                    GenerateEMUGameInfoGrid.IsEnabled = true;
+                    GenerateEMUConfigGrid.IsEnabled = true;
+                    UnpackGrid.IsEnabled = true;
+                    ApplyEMUGrid.IsEnabled = true;
+                    GenerateCrackOnlyGrid.IsEnabled = true;
+                    // Allow other areas when not enabled restore
+                    viewModel.GenerateEMUGameInfo = !viewModel.Restore;
+                    viewModel.GenerateEMUConfig = !viewModel.Restore;
+                    viewModel.Unpack = !viewModel.Restore;
+                    viewModel.ApplyEMU = !viewModel.Restore;
+                    viewModel.GenerateCrackOnly = !viewModel.Restore;
+                    GenerateEMUGameInfo.IsEnabled = !viewModel.Restore;
+                    GenerateEMUConfig.IsEnabled = !viewModel.Restore;
+                    Unpack.IsEnabled = !viewModel.Restore;
+                    ApplyEMU.IsEnabled = !viewModel.Restore;
+                    GenerateCrackOnly.IsEnabled = !viewModel.Restore;
+                
+                    Restore.IsEnabled = true;
+                    InputPath.IsEnabled = true;
+                    Select.IsEnabled = true;
+                    viewModel.StartBtnString = Properties.Resources.Start;
+                    break;
+                case UIState.Processing:
+                    Start.IsEnabled = true;
+                    AppIDFinder.IsEnabled = false;
+                    Settings.IsEnabled = false;
+                    GenerateEMUGameInfoGrid.IsEnabled = false;
+                    GenerateEMUConfigGrid.IsEnabled = false;
+                    UnpackGrid.IsEnabled = false;
+                    ApplyEMUGrid.IsEnabled = false;
+                    GenerateCrackOnlyGrid.IsEnabled = false;
+                    GenerateEMUGameInfo.IsEnabled = false;
+                    GenerateEMUConfig.IsEnabled = false;
+                    Unpack.IsEnabled = false;
+                    ApplyEMU.IsEnabled = false;
+                    GenerateCrackOnly.IsEnabled = false;
+                    Restore.IsEnabled = false;
+                    InputPath.IsEnabled = false;
+                    Select.IsEnabled = false;
+                    viewModel.StartBtnString = Properties.Resources.Stop;
+                    break;
+                case UIState.ProcessingNoStop:
+                    Start.IsEnabled = false;
+                    AppIDFinder.IsEnabled = false;
+                    Settings.IsEnabled = false;
+                    GenerateEMUGameInfoGrid.IsEnabled = false;
+                    GenerateEMUConfigGrid.IsEnabled = false;
+                    UnpackGrid.IsEnabled = false;
+                    ApplyEMUGrid.IsEnabled = false;
+                    GenerateCrackOnlyGrid.IsEnabled = false;
+                    GenerateEMUGameInfo.IsEnabled = false;
+                    GenerateEMUConfig.IsEnabled = false;
+                    Unpack.IsEnabled = false;
+                    ApplyEMU.IsEnabled = false;
+                    GenerateCrackOnly.IsEnabled = false;
+                    Restore.IsEnabled = false;
+                    InputPath.IsEnabled = false;
+                    Select.IsEnabled = false;
+                    break;
+                case UIState.AnotherWindowOpened:
+                    Start.IsEnabled = false;
+                    AppIDFinder.IsEnabled = false;
+                    Settings.IsEnabled = false;
+                    break;
+            }
+        });
+    }
+
     public MainWindow()
     {
         if (Config.SaveCrackConfig) Config.LoadConfig();
@@ -81,6 +173,7 @@ public partial class MainWindow
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         SteamAPICheckBypassMode_SelectionChanged(null, null);
+        UpdateUIState(UIState.Idle);
     }
 
     private void MainWindow_Closing(object sender, CancelEventArgs e)
@@ -127,25 +220,7 @@ public partial class MainWindow
                 return;
             }
 
-            Dispatcher.Invoke(() =>
-            {
-                Start.IsEnabled = false;
-                AppIDFinder.IsEnabled = false;
-                GenerateEMUGameInfoGrid.IsEnabled = false;
-                GenerateEMUConfigGrid.IsEnabled = false;
-                UnpackGrid.IsEnabled = false;
-                ApplyEMUGrid.IsEnabled = false;
-                GenerateCrackOnlyGrid.IsEnabled = false;
-                GenerateEMUGameInfo.IsEnabled = false;
-                GenerateEMUConfig.IsEnabled = false;
-                Unpack.IsEnabled = false;
-                ApplyEMU.IsEnabled = false;
-                GenerateCrackOnly.IsEnabled = false;
-                Restore.IsEnabled = false;
-                InputPath.IsEnabled = false;
-                Select.IsEnabled = false;
-                Settings.IsEnabled = false;
-            });
+            UpdateUIState(UIState.ProcessingNoStop);
 
             cts = new CancellationTokenSource();
 
@@ -156,9 +231,6 @@ public partial class MainWindow
                     Dispatcher.Invoke(() =>
                     {
                         bAppIDFinderOpened = true;
-                        Start.IsEnabled = false;
-                        Settings.IsEnabled = false;
-                        AppIDFinder.IsEnabled = false;
                         var finder = new AppIDFinder(GetAppName());
                         finder.ClosingEvent += AppIDFinderClosedStart;
                         finder.OKEvent += AppIDFinderOKStart;
@@ -168,39 +240,12 @@ public partial class MainWindow
                 return;
             }
 
-            Dispatcher.Invoke(() =>
-            {
-                Start.IsEnabled = true;
-                viewModel.StartBtnString = Properties.Resources.Stop;
-            });
+            UpdateUIState(UIState.Processing);
 
             bStarted = true;
             await new Processor().ProcessFileGUI(cts.Token).ConfigureAwait(false);
-            Dispatcher.Invoke(() =>
-            {
-                Settings.IsEnabled = true;
-                Start.IsEnabled = true;
-                viewModel.StartBtnString = Properties.Resources.Start;
-                AppIDFinder.IsEnabled = true;
-                GenerateEMUGameInfoGrid.IsEnabled = true;
-                GenerateEMUConfigGrid.IsEnabled = true;
-                UnpackGrid.IsEnabled = true;
-                ApplyEMUGrid.IsEnabled = true;
-                GenerateCrackOnlyGrid.IsEnabled = true;
-                if (!viewModel.Restore)
-                {
-                    GenerateEMUGameInfo.IsEnabled = true;
-                    GenerateEMUConfig.IsEnabled = true;
-                    Unpack.IsEnabled = true;
-                    ApplyEMU.IsEnabled = true;
-                    GenerateCrackOnly.IsEnabled = true;
-                }
-
-                Restore.IsEnabled = true;
-                InputPath.IsEnabled = true;
-                Select.IsEnabled = true;
-                bStarted = false;
-            });
+            UpdateUIState(UIState.Idle);
+            bStarted = false;
         });
     }
 
@@ -210,29 +255,7 @@ public partial class MainWindow
         Task.Run(() =>
         {
             bAppIDFinderOpened = false;
-            Dispatcher.Invoke(() =>
-            {
-                Settings.IsEnabled = true;
-                Start.IsEnabled = true;
-                AppIDFinder.IsEnabled = true;
-                GenerateEMUGameInfoGrid.IsEnabled = true;
-                GenerateEMUConfigGrid.IsEnabled = true;
-                UnpackGrid.IsEnabled = true;
-                ApplyEMUGrid.IsEnabled = true;
-                GenerateCrackOnlyGrid.IsEnabled = true;
-                if (!viewModel.Restore)
-                {
-                    GenerateEMUGameInfo.IsEnabled = true;
-                    GenerateEMUConfig.IsEnabled = true;
-                    Unpack.IsEnabled = true;
-                    ApplyEMU.IsEnabled = true;
-                    GenerateCrackOnly.IsEnabled = true;
-                }
-
-                Restore.IsEnabled = true;
-                InputPath.IsEnabled = true;
-                Select.IsEnabled = true;
-            });
+            UpdateUIState(UIState.Idle);
         });
     }
 
@@ -243,38 +266,11 @@ public partial class MainWindow
         {
             viewModel.AppID = appid.ToString();
             bAppIDFinderOpened = false;
-            Dispatcher.Invoke(() =>
-            {
-                Start.IsEnabled = true;
-                viewModel.StartBtnString = Properties.Resources.Stop;
-            });
+            UpdateUIState(UIState.Processing);
 
             await new Processor().ProcessFileGUI(cts.Token).ConfigureAwait(false);
-            Dispatcher.Invoke(() =>
-            {
-                Settings.IsEnabled = true;
-                Start.IsEnabled = true;
-                viewModel.StartBtnString = Properties.Resources.Start;
-                AppIDFinder.IsEnabled = true;
-                GenerateEMUGameInfoGrid.IsEnabled = true;
-                GenerateEMUConfigGrid.IsEnabled = true;
-                UnpackGrid.IsEnabled = true;
-                ApplyEMUGrid.IsEnabled = true;
-                GenerateCrackOnlyGrid.IsEnabled = true;
-                if (!viewModel.Restore)
-                {
-                    GenerateEMUGameInfo.IsEnabled = true;
-                    GenerateEMUConfig.IsEnabled = true;
-                    Unpack.IsEnabled = true;
-                    ApplyEMU.IsEnabled = true;
-                    GenerateCrackOnly.IsEnabled = true;
-                }
-
-                Restore.IsEnabled = true;
-                InputPath.IsEnabled = true;
-                Select.IsEnabled = true;
-                bStarted = false;
-            });
+            UpdateUIState(UIState.Idle);
+            bStarted = false;
         });
     }
 
@@ -354,9 +350,7 @@ public partial class MainWindow
         if (!bSettingsOpened)
         {
             bSettingsOpened = true;
-            Start.IsEnabled = false;
-            AppIDFinder.IsEnabled = false;
-            Settings.IsEnabled = false;
+            UpdateUIState(UIState.AnotherWindowOpened);
             var settings = new Settings();
             settings.ClosingEvent += SettingClosed;
             settings.ReloadValueEvent += viewModel.ReloadValue;
@@ -370,9 +364,7 @@ public partial class MainWindow
         if (!bAppIDFinderOpened)
         {
             bAppIDFinderOpened = true;
-            Start.IsEnabled = false;
-            Settings.IsEnabled = false;
-            AppIDFinder.IsEnabled = false;
+            UpdateUIState(UIState.AnotherWindowOpened);
             var finder = new AppIDFinder(GetAppName());
             finder.ClosingEvent += AppIDFinderClosed;
             finder.OKEvent += AppIDFinderOK;
@@ -417,18 +409,14 @@ public partial class MainWindow
     private void AppIDFinderClosed()
     {
         bAppIDFinderOpened = false;
-        Start.IsEnabled = true;
-        Settings.IsEnabled = true;
-        AppIDFinder.IsEnabled = true;
+        UpdateUIState(UIState.Idle);
     }
 
     private void AppIDFinderOK(uint appid)
     {
         viewModel.AppID = appid.ToString();
         bAppIDFinderOpened = false;
-        Start.IsEnabled = true;
-        Settings.IsEnabled = true;
-        AppIDFinder.IsEnabled = true;
+        UpdateUIState(UIState.Idle);
     }
 
     private void AboutClosed()
@@ -439,9 +427,7 @@ public partial class MainWindow
     private void SettingClosed()
     {
         bSettingsOpened = false;
-        Start.IsEnabled = true;
-        AppIDFinder.IsEnabled = true;
-        Settings.IsEnabled = true;
+        UpdateUIState(UIState.Idle);
     }
 
     public void CheckGoldberg()
@@ -582,31 +568,12 @@ public partial class MainWindow
 
     private void Restore_Checked(object sender, RoutedEventArgs e)
     {
-        viewModel.GenerateEMUGameInfo = false;
-        viewModel.GenerateEMUConfig = false;
-        viewModel.Unpack = false;
-        viewModel.ApplyEMU = false;
-        viewModel.GenerateCrackOnly = false;
-
-        GenerateEMUGameInfo.IsEnabled = false;
-        GenerateEMUConfig.IsEnabled = false;
-        Unpack.IsEnabled = false;
-        ApplyEMU.IsEnabled = false;
-        GenerateCrackOnly.IsEnabled = false;
+        UpdateUIState(UIState.Idle);
     }
 
     private void Restore_Unchecked(object sender, RoutedEventArgs e)
     {
-        GenerateEMUGameInfo.IsEnabled = true;
-        GenerateEMUConfig.IsEnabled = true;
-        Unpack.IsEnabled = true;
-        ApplyEMU.IsEnabled = true;
-        GenerateCrackOnly.IsEnabled = true;
-
-        viewModel.GenerateEMUGameInfo = true;
-        viewModel.GenerateEMUConfig = true;
-        viewModel.Unpack = true;
-        viewModel.ApplyEMU = true;
+        UpdateUIState(UIState.Idle);
     }
 
     #endregion
