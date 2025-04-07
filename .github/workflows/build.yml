@@ -1,10 +1,7 @@
-name: Build
+name: Build and Upload Artifact
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
     branches:
       - main
 
@@ -29,3 +26,12 @@ jobs:
 
     - name: Run tests
       run: dotnet test --no-restore --verbosity normal
+
+    - name: Publish application
+      run: dotnet publish --configuration Release --output publish
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: published-app
+        path: publish
