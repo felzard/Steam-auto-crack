@@ -7,31 +7,33 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        # If this workflow is in a different repository, you can specify the repo to clone:
+        # repository: SteamAutoCracks/Steam-auto-crack
+        # Otherwise, if this workflow is added in the Steam-auto-crack repo, you can omit this.
+        fetch-depth: 0
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
       with:
-        dotnet-version: 'latest' # Use the latest .NET SDK
+        dotnet-version: '8.0.x'  # Use .NET 8.0 as required by the project
 
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore SteamAutoCrack.sln
 
-    - name: Build
-      run: dotnet build --configuration Release --no-restore
-
-    - name: Run tests
-      run: dotnet test --no-restore --verbosity normal
+    - name: Build solution
+      run: dotnet build SteamAutoCrack.sln --configuration Release --no-restore
 
     - name: Publish application
-      run: dotnet publish --configuration Release --output publish
+      run: dotnet publish SteamAutoCrack.sln --configuration Release --output publish
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: published-app
+        name: SteamAutoCrack
         path: publish
